@@ -96,7 +96,7 @@ python -m streamlit run app.py
 
 **참고:** 데이터 CSV 파일은 별도로 준비하여 `data/` 폴더에 배치해야 합니다. 제공 데이터는 GitHub에 공개하지 않습니다.
 
-##개발 진행 현황
+개발 진행 현황
 
 - [x] 프로젝트 폴더 구조 구성
 - [x] Streamlit 기본 대시보드 구성
@@ -108,7 +108,7 @@ python -m streamlit run app.py
 - [ ] LangChain AI Agent 연결
 - [ ] 최종 테스트 및 발표
 
-##데이터 및 보안
+데이터 및 보안
 
 - 기업 제공 데이터는 공개 저장소에 업로드하지 않습니다.
 - API 키와 환경변수 파일(`.env`)은 Git 추적에서 제외합니다.
