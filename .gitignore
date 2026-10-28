@@ -2,6 +2,3 @@
 __pycache__/
 .env
 *.pyc
-
-
-data/*.csv

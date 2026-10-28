@@ -1,0 +1,81 @@
+sku,product_name,channel,week_start,currency,planned_ad_spend,promo_days,promo_discount
+A-SRM-100,¹ßÈ¿ ÆÛ½ºÆ® ¾ÚÇÃ 100ml,amazon_us,2026-07-27,USD,1947,0,0
+A-CRM-050,Àåº® Å©¸² 50ml,amazon_us,2026-07-27,USD,1947,0,0
+A-CAP-HY,¼öºÐ Ä¸½¶ ¾ÚÇÃ 40caps,amazon_us,2026-07-27,USD,1947,0,0
+A-CAP-VC,±¤Ã¤ Ä¸½¶ ¾ÚÇÃ 40caps,amazon_us,2026-07-27,USD,1947,0,0
+A-CAP-PN,ÁøÁ¤ Ä¸½¶ ¾ÚÇÃ 40caps,amazon_us,2026-07-27,USD,1947,0,0
+A-SRM-100,¹ßÈ¿ ÆÛ½ºÆ® ¾ÚÇÃ 100ml,coupang,2026-07-27,KRW,797099,0,0
+A-CRM-050,Àåº® Å©¸² 50ml,coupang,2026-07-27,KRW,797099,0,0
+A-CAP-HY,¼öºÐ Ä¸½¶ ¾ÚÇÃ 40caps,coupang,2026-07-27,KRW,797099,0,0
+A-CAP-VC,±¤Ã¤ Ä¸½¶ ¾ÚÇÃ 40caps,coupang,2026-07-27,KRW,797099,0,0
+A-CAP-PN,ÁøÁ¤ Ä¸½¶ ¾ÚÇÃ 40caps,coupang,2026-07-27,KRW,797099,0,0
+A-SRM-100,¹ßÈ¿ ÆÛ½ºÆ® ¾ÚÇÃ 100ml,naver,2026-07-27,KRW,449709,0,0
+A-CRM-050,Àåº® Å©¸² 50ml,naver,2026-07-27,KRW,449709,0,0
+A-CAP-HY,¼öºÐ Ä¸½¶ ¾ÚÇÃ 40caps,naver,2026-07-27,KRW,449709,0,0
+A-CAP-VC,±¤Ã¤ Ä¸½¶ ¾ÚÇÃ 40caps,naver,2026-07-27,KRW,449709,0,0
+A-CAP-PN,ÁøÁ¤ Ä¸½¶ ¾ÚÇÃ 40caps,naver,2026-07-27,KRW,449709,0,0
+A-SRM-100,¹ßÈ¿ ÆÛ½ºÆ® ¾ÚÇÃ 100ml,own_mall,2026-07-27,KRW,547519,0,0
+A-CRM-050,Àåº® Å©¸² 50ml,own_mall,2026-07-27,KRW,547519,0,0
+A-CAP-HY,¼öºÐ Ä¸½¶ ¾ÚÇÃ 40caps,own_mall,2026-07-27,KRW,547519,0,0
+A-CAP-VC,±¤Ã¤ Ä¸½¶ ¾ÚÇÃ 40caps,own_mall,2026-07-27,KRW,547519,0,0
+A-CAP-PN,ÁøÁ¤ Ä¸½¶ ¾ÚÇÃ 40caps,own_mall,2026-07-27,KRW,547519,0,0
+A-SRM-100,¹ßÈ¿ ÆÛ½ºÆ® ¾ÚÇÃ 100ml,amazon_us,2026-08-03,USD,1992,0,0
+A-CRM-050,Àåº® Å©¸² 50ml,amazon_us,2026-08-03,USD,1992,0,0
+A-CAP-HY,¼öºÐ Ä¸½¶ ¾ÚÇÃ 40caps,amazon_us,2026-08-03,USD,1992,0,0
+A-CAP-VC,±¤Ã¤ Ä¸½¶ ¾ÚÇÃ 40caps,amazon_us,2026-08-03,USD,1992,0,0
+A-CAP-PN,ÁøÁ¤ Ä¸½¶ ¾ÚÇÃ 40caps,amazon_us,2026-08-03,USD,1992,0,0
+A-SRM-100,¹ßÈ¿ ÆÛ½ºÆ® ¾ÚÇÃ 100ml,coupang,2026-08-03,KRW,826601,0,0
+A-CRM-050,Àåº® Å©¸² 50ml,coupang,2026-08-03,KRW,826601,0,0
+A-CAP-HY,¼öºÐ Ä¸½¶ ¾ÚÇÃ 40caps,coupang,2026-08-03,KRW,826601,0,0
+A-CAP-VC,±¤Ã¤ Ä¸½¶ ¾ÚÇÃ 40caps,coupang,2026-08-03,KRW,826601,0,0
+A-CAP-PN,ÁøÁ¤ Ä¸½¶ ¾ÚÇÃ 40caps,coupang,2026-08-03,KRW,826601,0,0
+A-SRM-100,¹ßÈ¿ ÆÛ½ºÆ® ¾ÚÇÃ 100ml,naver,2026-08-03,KRW,479531,1,0.3
+A-CRM-050,Àåº® Å©¸² 50ml,naver,2026-08-03,KRW,479531,1,0.3
+A-CAP-HY,¼öºÐ Ä¸½¶ ¾ÚÇÃ 40caps,naver,2026-08-03,KRW,479531,1,0.3
+A-CAP-VC,±¤Ã¤ Ä¸½¶ ¾ÚÇÃ 40caps,naver,2026-08-03,KRW,479531,1,0.3
+A-CAP-PN,ÁøÁ¤ Ä¸½¶ ¾ÚÇÃ 40caps,naver,2026-08-03,KRW,479531,1,0.3
+A-SRM-100,¹ßÈ¿ ÆÛ½ºÆ® ¾ÚÇÃ 100ml,own_mall,2026-08-03,KRW,440589,0,0
+A-CRM-050,Àåº® Å©¸² 50ml,own_mall,2026-08-03,KRW,440589,0,0
+A-CAP-HY,¼öºÐ Ä¸½¶ ¾ÚÇÃ 40caps,own_mall,2026-08-03,KRW,440589,0,0
+A-CAP-VC,±¤Ã¤ Ä¸½¶ ¾ÚÇÃ 40caps,own_mall,2026-08-03,KRW,440589,0,0
+A-CAP-PN,ÁøÁ¤ Ä¸½¶ ¾ÚÇÃ 40caps,own_mall,2026-08-03,KRW,440589,0,0
+A-SRM-100,¹ßÈ¿ ÆÛ½ºÆ® ¾ÚÇÃ 100ml,amazon_us,2026-08-10,USD,2447,0,0
+A-CRM-050,Àåº® Å©¸² 50ml,amazon_us,2026-08-10,USD,2447,0,0
+A-CAP-HY,¼öºÐ Ä¸½¶ ¾ÚÇÃ 40caps,amazon_us,2026-08-10,USD,2447,0,0
+A-CAP-VC,±¤Ã¤ Ä¸½¶ ¾ÚÇÃ 40caps,amazon_us,2026-08-10,USD,2447,0,0
+A-CAP-PN,ÁøÁ¤ Ä¸½¶ ¾ÚÇÃ 40caps,amazon_us,2026-08-10,USD,2447,0,0
+A-SRM-100,¹ßÈ¿ ÆÛ½ºÆ® ¾ÚÇÃ 100ml,coupang,2026-08-10,KRW,775572,0,0
+A-CRM-050,Àåº® Å©¸² 50ml,coupang,2026-08-10,KRW,775572,0,0
+A-CAP-HY,¼öºÐ Ä¸½¶ ¾ÚÇÃ 40caps,coupang,2026-08-10,KRW,775572,0,0
+A-CAP-VC,±¤Ã¤ Ä¸½¶ ¾ÚÇÃ 40caps,coupang,2026-08-10,KRW,775572,0,0
+A-CAP-PN,ÁøÁ¤ Ä¸½¶ ¾ÚÇÃ 40caps,coupang,2026-08-10,KRW,775572,0,0
+A-SRM-100,¹ßÈ¿ ÆÛ½ºÆ® ¾ÚÇÃ 100ml,naver,2026-08-10,KRW,465962,1,0.3
+A-CRM-050,Àåº® Å©¸² 50ml,naver,2026-08-10,KRW,465962,1,0.3
+A-CAP-HY,¼öºÐ Ä¸½¶ ¾ÚÇÃ 40caps,naver,2026-08-10,KRW,465962,1,0.3
+A-CAP-VC,±¤Ã¤ Ä¸½¶ ¾ÚÇÃ 40caps,naver,2026-08-10,KRW,465962,1,0.3
+A-CAP-PN,ÁøÁ¤ Ä¸½¶ ¾ÚÇÃ 40caps,naver,2026-08-10,KRW,465962,1,0.3
+A-SRM-100,¹ßÈ¿ ÆÛ½ºÆ® ¾ÚÇÃ 100ml,own_mall,2026-08-10,KRW,466263,5,0.15
+A-CRM-050,Àåº® Å©¸² 50ml,own_mall,2026-08-10,KRW,466263,5,0.15
+A-CAP-HY,¼öºÐ Ä¸½¶ ¾ÚÇÃ 40caps,own_mall,2026-08-10,KRW,466263,5,0.15
+A-CAP-VC,±¤Ã¤ Ä¸½¶ ¾ÚÇÃ 40caps,own_mall,2026-08-10,KRW,466263,5,0.15
+A-CAP-PN,ÁøÁ¤ Ä¸½¶ ¾ÚÇÃ 40caps,own_mall,2026-08-10,KRW,466263,5,0.15
+A-SRM-100,¹ßÈ¿ ÆÛ½ºÆ® ¾ÚÇÃ 100ml,amazon_us,2026-08-17,USD,2485,0,0
+A-CRM-050,Àåº® Å©¸² 50ml,amazon_us,2026-08-17,USD,2485,0,0
+A-CAP-HY,¼öºÐ Ä¸½¶ ¾ÚÇÃ 40caps,amazon_us,2026-08-17,USD,2485,0,0
+A-CAP-VC,±¤Ã¤ Ä¸½¶ ¾ÚÇÃ 40caps,amazon_us,2026-08-17,USD,2485,0,0
+A-CAP-PN,ÁøÁ¤ Ä¸½¶ ¾ÚÇÃ 40caps,amazon_us,2026-08-17,USD,2485,0,0
+A-SRM-100,¹ßÈ¿ ÆÛ½ºÆ® ¾ÚÇÃ 100ml,coupang,2026-08-17,KRW,868522,3,0.25
+A-CRM-050,Àåº® Å©¸² 50ml,coupang,2026-08-17,KRW,868522,3,0.25
+A-CAP-HY,¼öºÐ Ä¸½¶ ¾ÚÇÃ 40caps,coupang,2026-08-17,KRW,868522,3,0.25
+A-CAP-VC,±¤Ã¤ Ä¸½¶ ¾ÚÇÃ 40caps,coupang,2026-08-17,KRW,868522,3,0.25
+A-CAP-PN,ÁøÁ¤ Ä¸½¶ ¾ÚÇÃ 40caps,coupang,2026-08-17,KRW,868522,3,0.25
+A-SRM-100,¹ßÈ¿ ÆÛ½ºÆ® ¾ÚÇÃ 100ml,naver,2026-08-17,KRW,511717,0,0
+A-CRM-050,Àåº® Å©¸² 50ml,naver,2026-08-17,KRW,511717,0,0
+A-CAP-HY,¼öºÐ Ä¸½¶ ¾ÚÇÃ 40caps,naver,2026-08-17,KRW,511717,0,0
+A-CAP-VC,±¤Ã¤ Ä¸½¶ ¾ÚÇÃ 40caps,naver,2026-08-17,KRW,511717,0,0
+A-CAP-PN,ÁøÁ¤ Ä¸½¶ ¾ÚÇÃ 40caps,naver,2026-08-17,KRW,511717,0,0
+A-SRM-100,¹ßÈ¿ ÆÛ½ºÆ® ¾ÚÇÃ 100ml,own_mall,2026-08-17,KRW,527512,0,0
+A-CRM-050,Àåº® Å©¸² 50ml,own_mall,2026-08-17,KRW,527512,0,0
+A-CAP-HY,¼öºÐ Ä¸½¶ ¾ÚÇÃ 40caps,own_mall,2026-08-17,KRW,527512,0,0
+A-CAP-VC,±¤Ã¤ Ä¸½¶ ¾ÚÇÃ 40caps,own_mall,2026-08-17,KRW,527512,0,0
+A-CAP-PN,ÁøÁ¤ Ä¸½¶ ¾ÚÇÃ 40caps,own_mall,2026-08-17,KRW,527512,0,0
