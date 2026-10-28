@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from pathlib import Path
+from src.agent import ask_agent
 
 # 화면 설정
 st.set_page_config(
@@ -22,8 +23,6 @@ sales = load_sales()
 
 # 제목
 st.title("Ajou_AI_mini_Project")
-st.caption("광고비를 바꾸면 재고가 버틸까?")
-
 st.divider()
 
 # 상단 가로 메뉴
@@ -251,4 +250,37 @@ with tab4:
 
 with tab5:
     st.subheader("AI 재고 코파일럿")
-    st.info("LangChain Agent를 연결할 예정입니다.")
+    st.caption("광고비, 판매량, 재고에 대해 질문해 보세요.")
+
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    question = st.chat_input("메시지를 입력하세요...")
+
+    if question:
+        st.session_state.messages.append({
+            "role": "user",
+            "content": question
+        })
+
+        with st.chat_message("user"):
+            st.markdown(question)
+
+        with st.chat_message("assistant"):
+            with st.spinner("AI가 분석 중입니다..."):
+                try:
+                    answer = ask_agent(question)
+                    st.markdown(answer)
+
+                except Exception as e:
+                    answer = f"오류가 발생했습니다: {e}"
+                    st.error(answer)
+
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": answer
+        })
