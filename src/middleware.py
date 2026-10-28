@@ -6,7 +6,6 @@ from langchain.agents.middleware import (
 from langchain_core.messages import AIMessage
 
 
-# 업무 관련 키워드
 BUSINESS_KEYWORDS = [
     "광고비", "광고 예산",
     "판매량", "매출", "재고",
@@ -17,8 +16,6 @@ BUSINESS_KEYWORDS = [
     "네이버", "쿠팡", "아마존",
     "자사몰", "sku",
 ]
-
-
 @before_agent(can_jump_to=["end"])
 def business_guardrail(state, runtime):
     """업무와 관계없는 질문을 LLM 호출 전에 차단한다."""
@@ -30,16 +27,13 @@ def business_guardrail(state, runtime):
 
     question = str(messages[-1].content).lower().strip()
 
-    # 간단한 인사말 허용
     if question in ["안녕", "안녕하세요", "고마워", "감사합니다"]:
         return None
 
-    # 업무 관련 질문 허용
     if any(word in question for word in BUSINESS_KEYWORDS):
         print("[Middleware] 업무 질문 허용")
         return None
 
-    # 업무 외 질문 차단
     print("[Middleware] 업무 외 질문 차단")
 
     return {
@@ -54,8 +48,6 @@ def business_guardrail(state, runtime):
         ],
         "jump_to": "end",
     }
-
-
 @wrap_model_call
 def log_token_usage(request, handler):
     """LLM 호출 후 토큰 사용량을 출력한다."""
