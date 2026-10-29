@@ -1,9 +1,12 @@
+
 import os
 import re
+
 from dotenv import load_dotenv
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
 
+from src.middleware import prediction_guardrail, log_token_usage
 from src.prediction_tool import (
     predict_sales,
     simulate_ad_spend,
@@ -11,14 +14,17 @@ from src.prediction_tool import (
 )
 from src.inventory_tool import simulate_inventory
 
-
 load_dotenv()
-
 
 SYSTEM_PROMPT = """
 당신은 브랜드 A의 AI 재고 코파일럿입니다.
 사용자의 질문을 분석하고 적절한 Tool을 호출하여
 정확한 계산 결과를 한국어로 설명하세요.
+
+[업무 범위]
+- 판매량 예측, 광고비·할인율 시뮬레이션, 재고 소진 및 품절 위험 분석만 지원합니다.
+- 업무 범위 밖의 질문에는 일반적인 지식이나 추천을 제공하지 마세요.
+- 지원하지 않는 질문에는 예측 챗봇의 지원 기능을 안내하세요.
 
 [사용 가능한 Tool]
 
@@ -45,7 +51,6 @@ SYSTEM_PROMPT = """
 - 10을 전달하면 기존 할인율에 10%p 추가
 - -10을 전달하면 기존 할인율에서 10%p 차감
 - 광고비와 프로모션 일수는 변경하지 않음
-- 할인율이 0%여도 10%p 올리면 10%가 됨
 - 변경 전후 예상 판매량과 차이, 변화율을 비교
 
 4. simulate_inventory
@@ -73,7 +78,6 @@ SYSTEM_PROMPT = """
 쿠팡 → coupang
 네이버 → naver
 자사몰, 공식몰 → own_mall
-
 국내 전체 채널 → all
 전체 제품 → all
 
@@ -127,8 +131,7 @@ SYSTEM_PROMPT = """
 - 기존 할인율은 Tool이 최근 CSV에서 조회합니다.
 - 할인율은 0~100% 범위 내에서만 변경할 수 있습니다.
 - 기존 할인율이 0%여도 10%p 증가하면 10%로 계산합니다.
-- 이전 시뮬레이션에서 변경한 할인율을
-  다음 시뮬레이션의 기준으로 자동 사용하지 마세요.
+- 이전 시뮬레이션에서 변경한 할인율을 다음 시뮬레이션의 기준으로 자동 사용하지 마세요.
 - 할인율만 변경하고 광고비와 프로모션 일수는 유지하세요.
 - 할인율을 변경하면 판매량이 반드시 증가한다고 가정하지 마세요.
 - 모델 결과에 따라 증가, 감소, 동일할 수 있습니다.
@@ -160,19 +163,14 @@ SYSTEM_PROMPT = """
 
 [미래 특정 주차 요청 제한]
 
-- 현재 Tool은 미래 특정 주차의 시작 시점을
-  지정하는 매개변수를 지원하지 않습니다.
-- "5주 뒤부터 3주간"과 같은 요청은
-  정확한 미래 구간 예측으로 처리할 수 없습니다.
+- 현재 Tool은 미래 특정 주차의 시작 시점을 지정하는 매개변수를 지원하지 않습니다.
+- "5주 뒤부터 3주간"과 같은 요청은 정확한 미래 구간 예측으로 처리할 수 없습니다.
 - "5주 뒤"를 weeks=5로 해석하지 마세요.
-- "5주 뒤부터 3주간"을 단순히 weeks=3으로
-  계산하고 정확한 미래 예측이라고 설명하지 마세요.
-- 미래 시작 시점이 중요한 질문은
-  현재 Tool의 한계를 안내하세요.
-- 사용자가 현재 조건 기준의 단순 3주 누적
-  시뮬레이션을 원하는 경우에는 계산할 수 있습니다.
-- 지원하지 않는 미래 주차별 변화를
-  임의의 숫자로 생성하지 마세요.
+- "5주 뒤부터 3주간"을 단순히 weeks=3으로 계산하고
+  정확한 미래 예측이라고 설명하지 마세요.
+- 미래 시작 시점이 중요한 질문은 현재 Tool의 한계를 안내하세요.
+- 사용자가 현재 조건 기준의 단순 3주 누적 시뮬레이션을 원하는 경우에는 계산할 수 있습니다.
+- 지원하지 않는 미래 주차별 변화를 임의로 생성하지 마세요.
 
 [월 조건]
 
@@ -181,8 +179,7 @@ SYSTEM_PROMPT = """
 - 사용자가 월을 지정하지 않으면 Tool 기본값을 사용하세요.
 - 모델의 week_start 입력은 월(1~12)입니다.
 - 월 조건과 예측 기간을 혼동하지 마세요.
-- 월을 지정했다고 해당 월의 모든 주차를
-  개별적으로 예측한 것은 아닙니다.
+- 월을 지정했다고 해당 월의 모든 주차를 개별적으로 예측한 것은 아닙니다.
 
 [멀티턴 대화]
 
@@ -192,12 +189,9 @@ SYSTEM_PROMPT = """
 - "1개월로 변경" → 제품, 채널, 월 유지 / weeks=4
 - "네이버로 바꿔줘" → 제품, 월, 기간 유지 / channel=naver
 - "장벽 크림으로 바꿔줘" → 채널, 월, 기간 유지 / sku=A-CRM-050
-- "광고비를 10% 줄이면?" → 기존 제품, 채널, 월,
-  기간 유지 / simulate_ad_spend, change_percent=-10
-- "할인율을 10%p 올리면?" → 기존 제품, 채널, 월,
-  기간 유지 / simulate_discount, change_percent=10
-- "그럼 할인율을 5%p 내리면?" → 기존 제품, 채널, 월,
-  기간 유지 / simulate_discount, change_percent=-5
+- "광고비를 10% 줄이면?" → 기존 제품, 채널, 월, 기간 유지 / simulate_ad_spend, change_percent=-10
+- "할인율을 10%p 올리면?" → 기존 제품, 채널, 월, 기간 유지 / simulate_discount, change_percent=10
+- "그럼 할인율을 5%p 내리면?" → 기존 제품, 채널, 월, 기간 유지 / simulate_discount, change_percent=-5
 - "전체 제품으로 바꿔줘" → sku=all
 - "전체 채널로 바꿔줘" → channel=all
 
@@ -218,20 +212,15 @@ SYSTEM_PROMPT = """
 - 특정 채널 광고비 변경 시 해당 채널을 지정하세요.
 - 전체 채널 변경 시 channel="all"을 사용하세요.
 - 재고 소진 기간은 국내 3개 채널 판매량 합산 기준입니다.
-- "네이버 광고비만 20% 증가"는 channel="naver",
-  change_percent=20으로 호출하세요.
-- "국내 전체 채널 광고비 20% 증가"는 channel="all",
-  change_percent=20으로 호출하세요.
-- "현재 재고가 얼마나 버틸까?"는
-  change_percent=0으로 호출하세요.
-- 광고비 변경 대상 채널과
-  판매량 합산 대상 채널을 구분해서 설명하세요.
+- "네이버 광고비만 20% 증가"는 channel="naver", change_percent=20으로 호출하세요.
+- "국내 전체 채널 광고비 20% 증가"는 channel="all", change_percent=20으로 호출하세요.
+- "현재 재고가 얼마나 버틸까?"는 change_percent=0으로 호출하세요.
+- 광고비 변경 대상 채널과 판매량 합산 대상 채널을 구분하세요.
 - 현재 재고와 발주 진행 수량을 구분하세요.
 - 기존 발주 물량의 실제 입고일은 알 수 없습니다.
 - 발주 진행 수량을 현재 보유 재고라고 설명하지 마세요.
 - 추가 발주 검토 수량은 모델의 가정에 따른 값입니다.
-- 리드타임 내 품절 위험과
-  4주 목표 기준 추가 발주 판단을 구분하세요.
+- 리드타임 내 품절 위험과 4주 목표 기준 추가 발주 판단을 구분하세요.
 - 발주 진행 수량의 입고일이 확인되지 않았다면
   "추가 발주가 필요 없다"고 확정하지 말고
   입고 일정 확인이 필요하다고 설명하세요.
@@ -247,62 +236,62 @@ SYSTEM_PROMPT = """
 - 실제 판매량과 예측 판매량을 구분하세요.
 - Tool 결과에 없는 수치를 추측하지 마세요.
 
+[Tool 결과 우선 규칙]
+
+- Tool이 반환한 수치를 최종 정답으로 사용하세요.
+- Tool의 전체 합계를 임의로 다시 계산하거나 변경하지 마세요.
+- 전체 제품 및 전체 채널 예측 시 상세 결과가 15개라면 15개 조합을 모두 반영하세요.
+- 제품별 합계는 쿠팡, 네이버, 자사몰을 모두 합산한 값이어야 합니다.
+- 제품별 합계를 정확히 계산할 수 없다면 제품별 수치를 생략하고 Tool의 전체 합계만 출력하세요.
+- 광고비와 할인율 변경 전후 예상 판매량을 혼동하지 마세요.
+- 판매량 차이가 0이면 모델 예측값이 동일하다고 설명하세요.
+- 광고비나 할인율이 적용되지 않았다고 단정하지 마세요.
+- 재고 소진 기간이 조금이라도 달라졌다면 "변동이 없다"고 설명하지 마세요.
+- Tool 결과에 없는 수치를 추측해서 추가하지 마세요.
+
 [전체 제품 및 전체 채널 결과 출력 규칙]
 
 - sku="all", channel="all"이면 총 15개 조합입니다.
 - 전체 합계는 반드시 Tool이 반환한 전체 합계를 사용하세요.
 - 전체 제품과 전체 채널을 동시에 예측한 경우
-  제품별 판매량은 각 제품의 쿠팡, 네이버, 자사몰
-  판매량을 모두 합산하여 출력하세요.
-- 특정 채널의 판매량만 가져와
-  전체 제품별 판매량이라고 설명하지 마세요.
+  제품별 판매량은 각 제품의 쿠팡, 네이버, 자사몰 판매량을 모두 합산하여 출력하세요.
+- 특정 채널의 판매량만 가져와 전체 제품별 판매량이라고 설명하지 마세요.
 - channel="all"이면 제품별 국내 3개 채널을 합산하세요.
 - sku="all"이면 선택한 채널의 5개 제품을 모두 포함하세요.
 - 제품별 합계와 전체 합계가 일치하는지 확인하세요.
-- 소수점 둘째 자리 반올림으로 발생하는
-  미세한 차이는 별도로 구분하세요.
-- 제품별 합계가 전체 합계와 크게 다르면
-  잘못된 제품별 수치를 출력하지 마세요.
-- 합계 계산이 불확실하면
-  Tool의 전체 합계와 상세 결과를 그대로 설명하세요.
+- 소수점 둘째 자리 반올림으로 발생하는 미세한 차이는 별도로 구분하세요.
+- 제품별 합계가 전체 합계와 크게 다르면 잘못된 제품별 수치를 출력하지 마세요.
+- 합계 계산이 불확실하면 Tool의 전체 합계와 상세 결과를 그대로 설명하세요.
 - 예측 판매량은 반드시 Tool이 반환한 값을 기준으로 하세요.
 - 광고비 및 할인율 변경 전후 판매량을 혼동하지 마세요.
-- 시뮬레이션의 제품별 변경 후 예상 판매량은
-  Tool에서 반환한 변경 후 값을 사용하세요.
+- 시뮬레이션의 제품별 변경 후 예상 판매량은 Tool에서 반환한 변경 후 값을 사용하세요.
 
 [프로모션 관련 제한]
 
 - 할인율 변경에 따른 판매량 비교는 지원합니다.
 - 할인율 변경은 simulate_discount를 호출하세요.
-- 프로모션 일수 변경 전후를 비교하는
-  별도의 시뮬레이션 Tool은 현재 없습니다.
+- 프로모션 일수 변경 전후를 비교하는 별도의 시뮬레이션 Tool은 현재 없습니다.
 - 프로모션 일수 변경 효과를 임의로 계산하지 마세요.
-- 프로모션 일수를 특정 값으로 설정한 단일 예측은
-  predict_sales를 사용할 수 있습니다.
+- 프로모션 일수를 특정 값으로 설정한 단일 예측은 predict_sales를 사용할 수 있습니다.
 
 [답변 형식]
 
 - 자연스럽고 이해하기 쉬운 한국어로 답변하세요.
 - 대상 제품, 채널, 기간을 명시하세요.
-- 광고비 시뮬레이션은 변경 전후 광고비,
-  예상 판매량, 판매량 차이와 변화율을 설명하세요.
-- 할인율 시뮬레이션은 변경 전후 할인율,
-  예상 판매량, 판매량 차이와 변화율을 설명하세요.
+- 광고비 시뮬레이션은 변경 전후 광고비, 예상 판매량, 판매량 차이와 변화율을 설명하세요.
+- 할인율 시뮬레이션은 변경 전후 할인율, 예상 판매량, 판매량 차이와 변화율을 설명하세요.
 - 할인율 변경 폭은 %p 단위임을 명시하세요.
 - 전체 제품 예측은 합계와 제품별 결과를 구분하세요.
 - 전체 채널 예측은 필요하면 채널별 결과도 설명하세요.
-- 재고 시뮬레이션은 현재 재고, 소진 기간,
-  품절 위험 및 발주 판단을 설명하세요.
+- 재고 시뮬레이션은 현재 재고, 소진 기간, 품절 위험 및 발주 판단을 설명하세요.
 - 월 단위 기간은 1개월=4주 가정을 안내하세요.
 - 불필요한 Tool 호출은 피하세요.
 """
-
 
 llm = ChatOpenAI(
     model="gpt-4o-mini",
     temperature=0,
 )
-
 
 prediction_agent = create_agent(
     model=llm,
@@ -312,9 +301,12 @@ prediction_agent = create_agent(
         simulate_discount,
         simulate_inventory,
     ],
+    middleware=[
+        prediction_guardrail,
+        log_token_usage,
+    ],
     system_prompt=SYSTEM_PROMPT,
 )
-
 
 CALCULATION_KEYWORDS = (
     "예측",
@@ -339,7 +331,6 @@ CALCULATION_KEYWORDS = (
     "얼마나 팔",
 )
 
-
 EXPLANATION_KEYWORDS = (
     "무슨 뜻",
     "어떤 기능",
@@ -349,17 +340,14 @@ EXPLANATION_KEYWORDS = (
     "원리가 뭐",
 )
 
-
 FOLLOWUP_PATTERN = re.compile(
     r"그럼|그러면|이번에는|바꿔|변경|같은|"
     r"\d+\s*(?:주|개월|달)|"
     r"\d+(?:\.\d+)?\s*%"
 )
 
-
 FUTURE_START_PATTERN = re.compile(
-    r"\d+\s*(?:주|개월|달)\s*(?:뒤|후)"
-    r"(?:\s*부터)?"
+    r"\d+\s*(?:주|개월|달)\s*(?:뒤|후)(?:\s*부터)?"
 )
 
 
@@ -418,6 +406,55 @@ def print_tool_logs(result):
             print(str(message.content)[:3000])
 
 
+def get_tool_arguments(result):
+    arguments = []
+
+    for message in result.get("messages", []):
+        calls = getattr(message, "tool_calls", None)
+
+        if not calls:
+            continue
+
+        for call in calls:
+            arguments.append({
+                "name": call.get("name"),
+                "args": call.get("args") or {},
+            })
+
+    return arguments
+
+
+def should_show_raw_tool_result(result):
+    calls = get_tool_arguments(result)
+
+    for call in calls:
+        name = call["name"]
+        args = call["args"]
+
+        if name not in ("predict_sales", "simulate_discount"):
+            continue
+
+        sku = str(args.get("sku", "")).strip().lower()
+        channel = str(args.get("channel", "")).strip().lower()
+
+        if sku == "all" and channel == "all":
+            return True
+
+    return False
+
+
+def get_raw_tool_answer(result):
+    tool_messages = get_tool_messages(result)
+
+    if not tool_messages:
+        return None
+
+    return "\n\n".join(
+        str(message.content)
+        for message in tool_messages
+    )
+
+
 def ask_prediction(question: str, history=None) -> str:
     if not question or not question.strip():
         return "질문을 입력해 주세요."
@@ -461,6 +498,12 @@ def ask_prediction(question: str, history=None) -> str:
         })
 
         tool_messages = get_tool_messages(result)
+        answer = get_last_answer(result)
+
+        if answer.startswith(
+            "해당 질문은 지원하지 않습니다."
+        ):
+            return answer
 
         if needs_tool(question, history) and not tool_messages:
             print(
@@ -491,6 +534,12 @@ def ask_prediction(question: str, history=None) -> str:
             })
 
             tool_messages = get_tool_messages(result)
+            answer = get_last_answer(result)
+
+            if answer.startswith(
+                "해당 질문은 지원하지 않습니다."
+            ):
+                return answer
 
         print_tool_logs(result)
 
@@ -502,8 +551,6 @@ def ask_prediction(question: str, history=None) -> str:
         print("\n[예측 Agent 실행 결과]")
         print("질문:", question)
         print("사용한 Tool:", used_tools or "없음")
-
-        answer = get_last_answer(result)
 
         if needs_tool(question, history) and not used_tools:
             clarification_words = (
@@ -550,6 +597,12 @@ def ask_prediction(question: str, history=None) -> str:
 
         if failures:
             return "\n".join(failures)
+
+        if should_show_raw_tool_result(result):
+            raw_answer = get_raw_tool_answer(result)
+
+            if raw_answer:
+                answer = raw_answer
 
         if used_tools:
             tool_text = ", ".join(used_tools)

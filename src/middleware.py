@@ -1,7 +1,5 @@
-from langchain.agents.middleware import (
-    before_agent,
-    wrap_model_call,
-)
+
+from langchain.agents.middleware import before_agent, wrap_model_call
 from langchain_core.messages import AIMessage, HumanMessage
 
 
@@ -15,7 +13,6 @@ BUSINESS_KEYWORDS = [
     "네이버", "쿠팡", "아마존",
     "자사몰", "sku",
 ]
-
 
 FOLLOWUP_KEYWORDS = [
     "그럼", "그러면",
@@ -34,10 +31,49 @@ FOLLOWUP_KEYWORDS = [
     "몇개", "어때",
 ]
 
+PREDICTION_KEYWORDS = [
+    "예측", "예상", "전망",
+    "시뮬레이션", "판매량",
+    "광고비", "광고 예산",
+    "할인율", "할인",
+    "프로모션", "재고",
+    "품절", "소진",
+    "발주", "수요",
+    "몇 주", "몇주",
+    "몇 개", "몇개",
+]
+
+PREDICTION_EXPLANATION_KEYWORDS = [
+    "사용 방법",
+    "사용법",
+    "어떤 기능",
+    "무슨 기능",
+    "무엇을 할 수",
+    "어떻게 사용",
+    "원리가 뭐",
+]
+
+OUT_OF_SCOPE_KEYWORDS = [
+    "점심", "저녁 메뉴",
+    "아침 메뉴", "메뉴 추천",
+    "음식 추천", "맛집",
+    "날씨", "기온",
+    "운세", "로또",
+    "영화 추천",
+    "노래 추천",
+    "파이썬 코드",
+    "자바 코드",
+]
+
+BLOCK_MESSAGE = (
+    "해당 질문은 지원하지 않습니다. "
+    "판매량 예측, 광고비·할인율 시뮬레이션, "
+    "재고 소진 및 품절 위험 분석과 관련된 "
+    "질문을 입력해 주세요."
+)
+
 
 def get_message_content(message):
-    """LangChain 메시지와 dict 메시지를 모두 처리한다."""
-
     if isinstance(message, dict):
         return str(message.get("content", ""))
 
@@ -45,8 +81,6 @@ def get_message_content(message):
 
 
 def is_user_message(message):
-    """사용자 메시지 여부를 확인한다."""
-
     if isinstance(message, HumanMessage):
         return True
 
@@ -57,8 +91,6 @@ def is_user_message(message):
 
 
 def is_business_question(question):
-    """업무 관련 키워드가 포함되어 있는지 확인한다."""
-
     question = question.lower()
 
     return any(
@@ -68,8 +100,6 @@ def is_business_question(question):
 
 
 def is_followup_question(question):
-    """이전 질문에 이어지는 표현인지 확인한다."""
-
     question = question.lower()
 
     return any(
@@ -78,13 +108,34 @@ def is_followup_question(question):
     )
 
 
+def is_prediction_question(question):
+    question = question.lower()
+
+    return any(
+        keyword in question
+        for keyword in PREDICTION_KEYWORDS
+    )
+
+
+def is_prediction_explanation(question):
+    question = question.lower()
+
+    return any(
+        keyword in question
+        for keyword in PREDICTION_EXPLANATION_KEYWORDS
+    )
+
+
+def get_user_questions(state):
+    return [
+        get_message_content(message).lower().strip()
+        for message in state.get("messages", [])
+        if is_user_message(message)
+    ]
+
+
 @before_agent(can_jump_to=["end"])
 def business_guardrail(state, runtime):
-    """
-    업무 관련 질문을 허용하고,
-    이전 업무 대화에 이어지는 후속 질문도 허용한다.
-    """
-
     messages = state.get("messages", [])
 
     if not messages:
@@ -155,10 +206,73 @@ def business_guardrail(state, runtime):
     }
 
 
+@before_agent(can_jump_to=["end"])
+def prediction_guardrail(state, runtime):
+    questions = get_user_questions(state)
+
+    if not questions:
+        return None
+
+    question = questions[-1]
+    previous_questions = questions[:-1]
+
+    print("\n[Prediction Guardrail]")
+    print("현재 질문:", question)
+    print("이전 질문:", previous_questions)
+
+    if question in [
+        "안녕",
+        "안녕하세요",
+        "고마워",
+        "감사합니다",
+    ]:
+        print("결과: 일반 인사 허용\n")
+        return None
+
+    if any(
+        keyword in question
+        for keyword in OUT_OF_SCOPE_KEYWORDS
+    ):
+        print("결과: 업무 외 질문 차단\n")
+        return {
+            "messages": [
+                AIMessage(content=BLOCK_MESSAGE)
+            ],
+            "jump_to": "end",
+        }
+
+    if is_prediction_question(question):
+        print("결과: 예측 관련 질문 허용\n")
+        return None
+
+    if is_prediction_explanation(question):
+        print("결과: 예측 기능 설명 허용\n")
+        return None
+
+    has_prediction_history = any(
+        is_prediction_question(previous_question)
+        for previous_question in previous_questions
+    )
+
+    if (
+        has_prediction_history
+        and is_followup_question(question)
+    ):
+        print("결과: 예측 후속 질문 허용\n")
+        return None
+
+    print("결과: 예측 범위 외 질문 차단\n")
+
+    return {
+        "messages": [
+            AIMessage(content=BLOCK_MESSAGE)
+        ],
+        "jump_to": "end",
+    }
+
+
 @wrap_model_call
 def log_token_usage(request, handler):
-    """LLM 호출 후 토큰 사용량을 출력한다."""
-
     response = handler(request)
 
     usage = getattr(

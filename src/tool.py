@@ -12,43 +12,60 @@ DATA_PATH = (
 )
 
 
+CHANNELS = [
+    "all",
+    "own_mall",
+    "coupang",
+    "naver",
+    "amazon_us",
+]
+
+
 @tool
-def get_sales_data(channel: str, weeks: int = 4) -> str:
+def get_sales_data(channel: str = "all", weeks: int = 4) -> str:
     """
-    판매 채널의 최근 N주 제품별 판매량을 조회합니다.
+    최근 N주 제품별 실제 판매량을 조회합니다.
+    채널을 지정하지 않거나 전체 조회를 요청하면 channel='all'을 사용합니다.
+
     Args:
-        channel: 판매 채널 (own_mall, coupang, naver, amazon_us)
+        channel: 판매 채널 (all, own_mall, coupang, naver, amazon_us)
         weeks: 조회할 최근 주 수 (기본값 4주)
     """
-    channels = ["own_mall", "coupang", "naver", "amazon_us"]
 
-    if channel not in channels:
-        return f"지원하지 않는 채널입니다. 가능한 채널: {', '.join(channels)}"
-    
+    if channel not in CHANNELS:
+        return f"지원하지 않는 채널입니다. 가능한 채널: {', '.join(CHANNELS)}"
+
     if weeks < 1 or weeks > 100:
         return "조회 기간은 1~100주 사이여야 합니다."
-    
-    df = pd.read_csv(DATA_PATH)
 
+    df = pd.read_csv(DATA_PATH)
     df["week_start"] = pd.to_datetime(df["week_start"])
-    channel_df = df[df["channel"] == channel].copy()
+
+    if channel == "all":
+        channel_df = df.copy()
+    else:
+        channel_df = df[df["channel"] == channel].copy()
 
     if channel_df.empty:
         return "해당 채널의 판매 데이터가 없습니다."
+
     latest_week = channel_df["week_start"].max()
     start_week = latest_week - pd.Timedelta(weeks=weeks - 1)
+
     recent_df = channel_df[
         (channel_df["week_start"] >= start_week)
         & (channel_df["week_start"] <= latest_week)
     ]
 
+    if recent_df.empty:
+        return "해당 기간에 판매 데이터가 없습니다."
+
     result = (
-        recent_df.groupby("product_name")["units"].sum().sort_values(ascending=False)
+        recent_df.groupby("product_name")["units"]
+        .sum()
+        .sort_values(ascending=False)
     )
 
-    if result.empty:
-        return "해당 기간에 판매 데이터가 없습니다."
-    
     lines = [
         f"판매 채널: {channel}",
         f"조회 기간: {start_week.date()} ~ {latest_week.date()}",
@@ -60,24 +77,38 @@ def get_sales_data(channel: str, weeks: int = 4) -> str:
     for product, units in result.items():
         lines.append(f"- {product}: {units:,}개")
 
+    if channel == "all":
+        channel_result = (
+            recent_df.groupby("channel")["units"]
+            .sum()
+            .sort_values(ascending=False)
+        )
+
+        lines.extend([
+            "",
+            "[채널별 판매량]",
+        ])
+
+        for channel_name, units in channel_result.items():
+            lines.append(f"- {channel_name}: {units:,}개")
+
     return "\n".join(lines)
 
 
-
 @tool
-def get_ad_spend_data(channel: str, weeks: int = 4) -> str:
+def get_ad_spend_data(channel: str = "all", weeks: int = 4) -> str:
     """
-    판매 채널의 최근 N주 제품별 광고비를 조회합니다.
+    최근 N주 제품별 실제 광고비를 조회합니다.
+    채널을 지정하지 않거나 전체 조회를 요청하면 channel='all'을 사용합니다.
+    전체 채널 조회 시 KRW와 USD는 합산하지 않고 통화별로 구분합니다.
 
     Args:
-        channel: 판매 채널 (own_mall, coupang, naver, amazon_us)
+        channel: 판매 채널 (all, own_mall, coupang, naver, amazon_us)
         weeks: 조회할 최근 주 수 (기본값 4주)
     """
 
-    channels = ["own_mall", "coupang", "naver", "amazon_us"]
-
-    if channel not in channels:
-        return f"지원하지 않는 채널입니다. 가능한 채널: {', '.join(channels)}"
+    if channel not in CHANNELS:
+        return f"지원하지 않는 채널입니다. 가능한 채널: {', '.join(CHANNELS)}"
 
     if weeks < 1 or weeks > 100:
         return "조회 기간은 1~100주 사이여야 합니다."
@@ -85,7 +116,10 @@ def get_ad_spend_data(channel: str, weeks: int = 4) -> str:
     df = pd.read_csv(DATA_PATH)
     df["week_start"] = pd.to_datetime(df["week_start"])
 
-    channel_df = df[df["channel"] == channel].copy()
+    if channel == "all":
+        channel_df = df.copy()
+    else:
+        channel_df = df[df["channel"] == channel].copy()
 
     if channel_df.empty:
         return "해당 채널의 광고비 데이터가 없습니다."
@@ -101,33 +135,69 @@ def get_ad_spend_data(channel: str, weeks: int = 4) -> str:
     if recent_df.empty:
         return "해당 기간에 광고비 데이터가 없습니다."
 
-    currencies = recent_df["currency"].dropna().unique()
+    if recent_df["currency"].isna().any():
+        return "통화 단위를 확인할 수 없는 데이터가 있습니다."
 
-    if len(currencies) != 1:
+    currencies = recent_df["currency"].unique()
+
+    if channel != "all" and len(currencies) != 1:
         return "통화 단위를 확인할 수 없거나 혼합되어 있습니다."
-
-    currency = currencies[0]
-
-    # 제품별 광고비 합산
-    result = (
-        recent_df.groupby("product_name")["ad_spend"]
-        .sum()
-        .sort_values(ascending=False)
-    )
 
     lines = [
         f"판매 채널: {channel}",
         f"조회 기간: {start_week.date()} ~ {latest_week.date()}",
-        f"전체 광고비: {result.sum():,.0f} {currency}",
-        "",
-        "[제품별 광고비]",
     ]
 
-    for product, spend in result.items():
-        lines.append(f"- {product}: {spend:,.0f} {currency}")
+    for currency in currencies:
+        currency_df = recent_df[
+            recent_df["currency"] == currency
+        ]
+
+        result = (
+            currency_df.groupby("product_name")["ad_spend"]
+            .sum()
+            .sort_values(ascending=False)
+        )
+
+        lines.extend([
+            "",
+            f"[{currency} 광고비]",
+            f"전체 광고비: {result.sum():,.0f} {currency}",
+            "",
+            "[제품별 광고비]",
+        ])
+
+        for product, spend in result.items():
+            lines.append(
+                f"- {product}: {spend:,.0f} {currency}"
+            )
+
+        if channel == "all":
+            channel_result = (
+                currency_df.groupby("channel")["ad_spend"]
+                .sum()
+                .sort_values(ascending=False)
+            )
+
+            lines.extend([
+                "",
+                "[채널별 광고비]",
+            ])
+
+            for channel_name, spend in channel_result.items():
+                lines.append(
+                    f"- {channel_name}: {spend:,.0f} {currency}"
+                )
+
+    if len(currencies) > 1:
+        lines.extend([
+            "",
+            "[참고]",
+            "- 통화가 서로 다른 광고비는 직접 합산하거나 순위를 비교할 수 없습니다.",
+            "- 통화 간 비교에는 동일 기준 환율로 환산하는 과정이 필요합니다.",
+        ])
 
     return "\n".join(lines)
-
 
 
 @tool
