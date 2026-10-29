@@ -4,7 +4,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain.agents import create_agent
-from src.tool import simulate_ad_spend
 
 
 from src.tool import (
@@ -12,7 +11,7 @@ from src.tool import (
     get_ad_spend_data,
     get_inventory_data,
     predict_sales,
-    simulate_ad_spend
+    #simulate_ad_spend
 )
 
 from src.middleware import (
@@ -30,7 +29,7 @@ load_dotenv(
 
 # LLM 모델 설정
 model = ChatOpenAI(
-    model="gpt-4.1-mini",
+    model="gpt-5.5",
     temperature=0
 )
 
@@ -121,23 +120,7 @@ SYSTEM_PROMPT = """
 - 확인되지 않은 정보는 추측하지 않는다.
 - 답변은 간결하고 이해하기 쉽게 작성한다.
 
-[광고비만 변경하는 시뮬레이션]
-- 사용자가 광고비만 변경했을 때 예상 판매량 변화를 물으면
-  simulate_ad_spend를 호출한다.
-- 이 도구는 제품, 월, 프로모션, 채널의 기본값을 Python에서 계산한다.
-- 이 도구를 사용하는 경우 다른 조건을 추가로 질문하지 않는다.
-- 이는 일반 예측의 '입력 누락 시 확인' 규칙에 대한 명시적 예외이다.
-- LLM이 평균값이나 SKU 코드를 직접 계산하거나 추측하지 않는다.
 
-[자동 적용 조건]
-- 제품: 전체 CSV에서 가장 많이 등장한 SKU.
-- 최빈 SKU가 여러 개면 Tool이 선택한 SKU를 사용한다.
-- 월: 한국 시간 기준 현재 월.
-- 변경 전 광고비: 선택 SKU의 평균 광고비.
-- 프로모션 일수: 전체 CSV의 평균.
-- 할인율: 선택 SKU의 평균 할인율.
-- 채널: 쿠팡.
-- 이 조건들은 사용자 지정값이 아니라 자동 기본값임을 밝힌다.
 
 [도구 선택]
 - 사용자가 광고비 외에 특정 제품, 채널, 기간, 프로모션 조건을
@@ -159,6 +142,47 @@ SYSTEM_PROMPT = """
 - status가 error이면 수치를 만들지 말고 오류 이유를 안내한다.
 - warnings가 있으면 해당 내용을 함께 설명한다.
 
+[판매량 예측 및 조건 변경]
+- 예상 판매량이나 조건 변경에 따른 판매량 비교에는 predict_sales를 사용한다.
+- 사용자가 명시한 조건만 도구 인자로 전달한다.
+- 생략된 조건은 도구가 기본값을 계산하므로 추가로 질문하지 않는다.
+- LLM이 기본값을 계산하거나 임의로 채우지 않는다.
+- 광고비, 프로모션 일수, 할인율, 월, SKU, 채널 변경을 지원한다.
+- 여러 조건을 지정하면 명시된 조건을 모두 전달한다.
+- 아무 조건도 지정하지 않으면 predict_sales를 빈 인자로 호출하여
+  기본 조건의 예상 판매량을 확인한다.
+
+[기본 조건]
+- SKU: 전체 데이터 최빈값.
+- 월: 한국 시간 기준 현재 월.
+- 광고비: 기준 SKU의 평균 광고비.
+- 프로모션 일수: 전체 데이터 평균.
+- 할인율: 기준 SKU의 평균 할인율.
+- 채널: 쿠팡.
+- SKU 변경 시에도 생략된 광고비와 할인율은 기준 SKU의 평균을 유지한다.
+
+[입력 해석]
+- week_start는 주차가 아니라 월이며 1~12로 전달한다.
+- 쿠팡은 coupang, 네이버는 naver, 자사몰은 own_mall로 전달한다.
+- 채널의 원핫 인코딩은 Python 도구가 처리한다.
+- 제품명과 SKU 코드의 대응을 모르면 코드를 추측하지 않는다.
+- 할인율은 확인된 학습 데이터 단위로 전달한다.
+- '100만 원으로 변경'은 ad_spend=1000000이다.
+- '100만 원 증가', '20% 증가'는 변경 후 절대값과 다르다.
+  기준값을 확인해 변경 후 값을 계산한 다음 호출한다.
+- 지원하지 않는 채널을 쿠팡으로 대신 처리하지 않는다.
+
+[결과 설명]
+- 변경 전과 변경 후 판매량은 모두 모델 예측값이다.
+- 적용된 기본 조건과 실제 변경된 조건을 구분해 설명한다.
+- 하나의 조건만 변경했다면 나머지 조건이 동일함을 설명한다.
+- 조건을 여러 개 바꿨다면 결과를 특정 한 변수의 영향으로 단정하지 않는다.
+- 예측 변화가 없으면 그대로 설명한다.
+- 증감률이 null이면 기준 예측이 0이어서 계산할 수 없다고 설명한다.
+- 모델 예측 비교를 인과효과나 보장된 성과로 표현하지 않는다.
+- status가 error이면 수치를 생성하지 않고 이유를 설명한다.
+- warnings를 답변에 반영한다.
+
 """
 
 
@@ -169,7 +193,7 @@ agent = create_agent(
         get_ad_spend_data,
         get_inventory_data,
         predict_sales,
-        simulate_ad_spend
+        #simulate_ad_spend
     ],
     middleware=[
         business_guardrail,

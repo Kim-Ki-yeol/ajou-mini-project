@@ -19,16 +19,16 @@ FEATURE_COLUMNS = [
     "channel_own_mall",
 ]
 
-# 컬럼 순서, 인코딩, 전처리를 확인한 뒤 True로 변경합니다.
-FEATURE_CONTRACT_CONFIRMED = False
+
+FEATURE_CONTRACT_CONFIRMED = True
 
 
 @lru_cache(maxsize=1)
 def load_forecast_model():
-    model = xgb.Booster()
+    model = xgb.XGBRFRegressor()
     model.load_model(str(ROOT / "models" / "xgbrfr_model.json"))
 
-    if model.num_features() != len(FEATURE_COLUMNS):
+    if model.get_booster().num_features() != len(FEATURE_COLUMNS):
         raise ValueError("모델 입력 특성 수가 예상과 다릅니다.")
 
     return model
@@ -73,7 +73,7 @@ def predict_units(features: dict) -> dict:
             )
 
     model = load_forecast_model()
-    raw = float(model.predict(xgb.DMatrix(X))[0])
+    raw = float(model.predict(X)[0])
 
     if not np.isfinite(raw):
         raise ValueError("모델이 유효하지 않은 예측값을 반환했습니다.")
