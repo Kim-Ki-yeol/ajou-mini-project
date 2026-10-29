@@ -263,3 +263,92 @@ def simulate_ad_spend(sku: str, channel: str, change_percent: float,
         return "\n".join(lines)
     except (ValueError, FileNotFoundError) as exc:
         return f"시뮬레이션 실패: {exc}"
+
+
+@tool
+def simulate_discount(
+    sku: str,
+    channel: str,
+    change_percent: float,
+    month: int = None,
+    weeks: int = 4,
+) -> str:
+    """할인율 변경에 따른 예상 판매량 비교.
+    change_percent=10은 할인율을 10%p 증가, -10은 10%p 감소시킵니다.
+    각 제품·채널의 최근 CSV 할인율을 기준으로 계산합니다.
+    sku와 channel은 all을 지원하며 weeks는 1~12주입니다.
+    """
+    try:
+        weeks = validate_weeks(weeks)
+        change_percent = validate_number(change_percent, "할인율 변경 폭")
+        targets = select_targets(sku, channel)
+        df = load_sales_data()
+        results = []
+
+        for selected_sku, selected_channel in targets:
+            original = get_conditions(
+                selected_sku,
+                selected_channel,
+                month=month,
+                df=df,
+            )
+            old_discount = original["promo_discount"]
+            new_discount = old_discount + change_percent / 100
+
+            if not 0 <= new_discount <= 1:
+                raise ValueError(
+                    f"{SKU_NAMES[selected_sku]} / "
+                    f"{CHANNEL_NAMES[selected_channel]}의 변경 할인율 "
+                    f"{new_discount * 100:.1f}%가 0~100% 범위를 벗어났습니다."
+                )
+
+            changed = original.copy()
+            changed["promo_discount"] = new_discount
+            old_weekly, old_total = run_period_prediction(original, weeks)
+            new_weekly, new_total = run_period_prediction(changed, weeks)
+            results.append({
+                "sku": selected_sku,
+                "channel": selected_channel,
+                "old_discount": old_discount,
+                "new_discount": new_discount,
+                "old_weekly": old_weekly,
+                "new_weekly": new_weekly,
+                "old_total": old_total,
+                "new_total": new_total,
+            })
+
+        old_total = sum(x["old_total"] for x in results)
+        new_total = sum(x["new_total"] for x in results)
+        difference = new_total - old_total
+        rate = (
+            f"{difference / old_total * 100:+.2f}%"
+            if old_total > 0 else "계산 불가"
+        )
+        lines = [
+            "[할인율 시뮬레이션]",
+            f"대상: {target_label(sku, channel)}",
+            f"기간: {weeks}주 / 조합: {len(results)}개",
+            f"할인율 변경: {change_percent:+.1f}%p",
+            f"주간 예상 판매량: "
+            f"{sum(x['old_weekly'] for x in results):.2f}개 → "
+            f"{sum(x['new_weekly'] for x in results):.2f}개",
+            f"{weeks}주 예상 판매량: {old_total:.2f}개 → {new_total:.2f}개",
+            f"판매량 차이: {difference:+.2f}개",
+            f"변화율: {rate}",
+            "",
+            "[제품별 상세]",
+        ]
+        for x in results:
+            lines.append(
+                f"- {SKU_NAMES[x['sku']]} / {CHANNEL_NAMES[x['channel']]}: "
+                f"할인율 {x['old_discount'] * 100:.1f}% → "
+                f"{x['new_discount'] * 100:.1f}%, "
+                f"{weeks}주 예상 판매량 "
+                f"{x['old_total']:.2f}개 → {x['new_total']:.2f}개"
+            )
+        lines.append("※ 광고비와 프로모션 일수는 기존 조건을 유지했습니다.")
+        lines.append("※ 동일한 주간 조건을 반복 적용한 모델 추정치입니다.")
+        lines.append("※ 실제 할인 효과나 매출·이익 증가를 보장하지 않습니다.")
+        return "\n".join(lines)
+    except (ValueError, FileNotFoundError) as exc:
+        return f"할인율 시뮬레이션 실패: {exc}"
