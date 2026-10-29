@@ -16,6 +16,7 @@ BUSINESS_KEYWORDS = [
     "자사몰", "sku",
 ]
 
+
 FOLLOWUP_KEYWORDS = [
     "그럼", "그러면",
     "이번에는", "이번엔",
@@ -26,12 +27,63 @@ FOLLOWUP_KEYWORDS = [
     "이전", "앞에서",
     "다시", "비교",
     "더", "줄여", "늘려",
+    "그중", "그 중",
+    "동일한", "똑같이",
+    "그것", "그거",
+    "얼마나", "몇 개",
+    "몇개", "어때",
 ]
+
+
+def get_message_content(message):
+    """LangChain 메시지와 dict 메시지를 모두 처리한다."""
+
+    if isinstance(message, dict):
+        return str(message.get("content", ""))
+
+    return str(getattr(message, "content", ""))
+
+
+def is_user_message(message):
+    """사용자 메시지 여부를 확인한다."""
+
+    if isinstance(message, HumanMessage):
+        return True
+
+    if isinstance(message, dict):
+        return message.get("role") in ("user", "human")
+
+    return getattr(message, "type", None) == "human"
+
+
+def is_business_question(question):
+    """업무 관련 키워드가 포함되어 있는지 확인한다."""
+
+    question = question.lower()
+
+    return any(
+        keyword in question
+        for keyword in BUSINESS_KEYWORDS
+    )
+
+
+def is_followup_question(question):
+    """이전 질문에 이어지는 표현인지 확인한다."""
+
+    question = question.lower()
+
+    return any(
+        keyword in question
+        for keyword in FOLLOWUP_KEYWORDS
+    )
 
 
 @before_agent(can_jump_to=["end"])
 def business_guardrail(state, runtime):
-    """업무 질문 및 이전 업무 대화의 후속 질문을 허용한다."""
+    """
+    업무 관련 질문을 허용하고,
+    이전 업무 대화에 이어지는 후속 질문도 허용한다.
+    """
 
     messages = state.get("messages", [])
 
@@ -41,15 +93,24 @@ def business_guardrail(state, runtime):
     user_messages = [
         message
         for message in messages
-        if isinstance(message, HumanMessage)
+        if is_user_message(message)
     ]
 
     if not user_messages:
         return None
 
-    question = str(
-        user_messages[-1].content
+    question = get_message_content(
+        user_messages[-1]
     ).lower().strip()
+
+    previous_questions = [
+        get_message_content(message).lower().strip()
+        for message in user_messages[:-1]
+    ]
+
+    print("\n[Business Guardrail]")
+    print("현재 질문:", question)
+    print("이전 질문:", previous_questions)
 
     if question in [
         "안녕",
@@ -57,38 +118,28 @@ def business_guardrail(state, runtime):
         "고마워",
         "감사합니다",
     ]:
+        print("결과: 일반 인사 허용\n")
         return None
 
-    if any(
-        keyword in question
-        for keyword in BUSINESS_KEYWORDS
-    ):
-        print("업무 질문 허용")
+    if is_business_question(question):
+        print("결과: 업무 질문 허용\n")
         return None
-
-    previous_questions = [
-        str(message.content).lower()
-        for message in user_messages[:-1]
-    ]
 
     has_business_history = any(
-        any(
-            keyword in previous_question
-            for keyword in BUSINESS_KEYWORDS
-        )
+        is_business_question(previous_question)
         for previous_question in previous_questions
     )
 
-    is_followup = any(
-        keyword in question
-        for keyword in FOLLOWUP_KEYWORDS
-    )
+    is_followup = is_followup_question(question)
+
+    print("업무 대화 기록 존재:", has_business_history)
+    print("후속 질문 여부:", is_followup)
 
     if has_business_history and is_followup:
-        print("이전 업무 대화의 후속 질문 허용")
+        print("결과: 이전 업무 대화 후속 질문 허용\n")
         return None
 
-    print("업무 외 질문 차단")
+    print("결과: 업무 외 질문 차단\n")
 
     return {
         "messages": [
