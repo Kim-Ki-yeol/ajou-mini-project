@@ -3,9 +3,8 @@ import streamlit as st
 import pandas as pd
 from pathlib import Path
 from src.agent import ask_agent
+from src.prediction_chatbot import ask_prediction
 
-
-# 화면 설정
 st.set_page_config(
     page_title="AI 재고 코파일럿",
     layout="wide",
@@ -64,6 +63,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+
 @st.cache_data
 def load_sales():
     return pd.read_csv(
@@ -71,6 +71,21 @@ def load_sales():
         encoding="utf-8-sig",
         parse_dates=["week_start"]
     )
+
+
+@st.cache_data
+def load_inventory():
+    try:
+        return pd.read_csv(
+            DATA_DIR / "inventory_now.csv",
+            encoding="utf-8-sig"
+        )
+    except UnicodeDecodeError:
+        return pd.read_csv(
+            DATA_DIR / "inventory_now.csv",
+            encoding="cp949"
+        )
+
 
 sales = load_sales()
 
@@ -94,6 +109,7 @@ with st.sidebar:
 st.title("AI 재고 코파일럿")
 st.caption("판매량 · 광고비 · 재고 분석 및 AI 기반 의사결정 지원")
 st.divider()
+
 
 if menu == "판매량 분석":
     st.subheader("주별 판매량 분석")
@@ -133,6 +149,7 @@ if menu == "판매량 분석":
         x_label="주차",
         y_label="판매량 (개)"
     )
+
 
 elif menu == "광고비 분석":
     st.subheader("광고비 분석")
@@ -191,20 +208,12 @@ elif menu == "광고비 분석":
             hide_index=True
         )
 
+
 elif menu == "재고 분석":
     st.subheader("재고 분석")
     st.write("창고별 제품 재고 현황을 확인합니다.")
 
-    try:
-        inventory = pd.read_csv(
-            DATA_DIR / "inventory_now.csv",
-            encoding="utf-8-sig"
-        )
-    except UnicodeDecodeError:
-        inventory = pd.read_csv(
-            DATA_DIR / "inventory_now.csv",
-            encoding="cp949"
-        )
+    inventory = load_inventory()
 
     warehouse = st.selectbox(
         "창고 선택",
@@ -306,8 +315,49 @@ elif menu == "재고 분석":
 
 
 elif menu == "판매량 예측":
-    st.subheader("판매량 예측")
-    st.info("모델이 완성되면 Tool을 구성하고 연동할 예정입니다.")
+    st.subheader("AI 판매량 예측 챗봇")
+    st.caption("XGBoost 기반 판매량 예측 및 광고비 시뮬레이션")
+
+    if "prediction_messages" not in st.session_state:
+        st.session_state.prediction_messages = []
+
+    for message in st.session_state.prediction_messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    question = st.chat_input(
+        "판매량 예측에 대해 질문해 보세요.",
+        key="prediction_chat_input"
+    )
+
+    if question:
+        st.session_state.prediction_messages.append({
+            "role": "user",
+            "content": question
+        })
+
+        with st.chat_message("user"):
+            st.markdown(question)
+
+        with st.chat_message("assistant"):
+            with st.spinner("판매량을 예측하고 있습니다..."):
+                try:
+                    answer = ask_prediction(question)
+
+                    if not isinstance(answer, str):
+                        answer = str(answer)
+
+                    st.markdown(answer)
+
+                except Exception as e:
+                    answer = f"예측 실행 중 오류가 발생했습니다: {e}"
+                    st.error(answer)
+
+        st.session_state.prediction_messages.append({
+            "role": "assistant",
+            "content": answer
+        })
+
 
 elif menu == "AI Agent":
     st.subheader("AI 재고 코파일럿")
@@ -320,7 +370,10 @@ elif menu == "AI Agent":
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    question = st.chat_input("궁금한 점을 입력 하세요 ")
+    question = st.chat_input(
+        "궁금한 점을 입력하세요.",
+        key="agent_chat_input"
+    )
 
     if question:
         st.session_state.messages.append({
@@ -335,13 +388,16 @@ elif menu == "AI Agent":
             with st.spinner("AI가 분석 중입니다..."):
                 try:
                     answer = ask_agent(question)
+
+                    if not isinstance(answer, str):
+                        answer = str(answer)
+
                     st.markdown(answer)
 
                 except Exception as e:
                     answer = f"오류가 발생했습니다: {e}"
                     st.error(answer)
 
-        # AI 응답 기록 저장
         st.session_state.messages.append({
             "role": "assistant",
             "content": answer
