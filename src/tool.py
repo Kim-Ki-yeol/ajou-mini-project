@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 from langchain.tools import tool
+from src.forecast import predict_units
 
 
 DATA_PATH = (
@@ -200,3 +201,160 @@ def get_inventory_data(channel: str = "all") -> str:
     ])
 
     return "\n".join(lines)
+
+
+
+
+@tool
+def predict_sales(
+    week_start: int,
+    sku: int,
+    ad_spend: float,
+    promo_days: int,
+    promo_discount: float,
+    channel_naver: int,
+    channel_own_mall: int,
+) -> dict:
+    """학습된 XGBoost 모델로 한 행의 판매량을 예측합니다.
+
+    모든 입력은 학습 당시와 동일한 인코딩·단위를 사용해야 합니다.
+    week_start와 sku는 학습 시 변환된 코드입니다.
+    채널은 학습 당시의 두 더미 변수로 전달합니다.
+    인코딩이나 입력 조건이 확인되지 않으면 호출하지 마세요.
+    과거 실적 조회 또는 재고 소진일 계산 도구가 아닙니다.
+    """
+    if ad_spend < 0:
+        return {"status": "error", "message": "광고비는 0 이상이어야 합니다."}
+
+    if not 0 <= promo_days <= 7:
+        return {"status": "error", "message": "프로모션 일수는 0~7입니다."}
+
+    if channel_naver not in (0, 1) or channel_own_mall not in (0, 1):
+        return {"status": "error", "message": "채널 코드는 0 또는 1입니다."}
+
+    if channel_naver + channel_own_mall > 1:
+        return {"status": "error", "message": "두 채널을 동시에 지정할 수 없습니다."}
+
+    features = {
+        "week_start": week_start,
+        "sku": sku,
+        "ad_spend": ad_spend,
+        "promo_days": promo_days,
+        "promo_discount": promo_discount,
+        "channel_naver": channel_naver,
+        "channel_own_mall": channel_own_mall,
+    }
+
+    try:
+        return predict_units(features)
+    except (ValueError, FileNotFoundError) as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+from datetime import datetime
+from zoneinfo import ZoneInfo
+import math
+
+from langchain.tools import tool
+
+from src.forecast import load_reference_data, predict_units
+
+
+@tool
+def simulate_ad_spend(new_ad_spend: float) -> dict:
+    """광고비만 변경했을 때 모델의 예상 판매량 변화를 비교합니다.
+
+    new_ad_spend: 변경 후 광고비. 학습 데이터와 동일한 단위.
+
+    나머지 조건은 자동 적용합니다.
+    - SKU: 전체 데이터 최빈값
+    - 월: 한국 시간 기준 현재 월
+    - 기존 광고비: 선택 SKU의 평균
+    - 프로모션 일수: 전체 데이터 평균
+    - 할인율: 선택 SKU의 평균
+    - 채널: 쿠팡
+    """
+    if not math.isfinite(new_ad_spend) or new_ad_spend < 0:
+        return {
+            "status": "error",
+            "message": "광고비는 0 이상의 유한한 숫자여야 합니다.",
+        }
+
+    try:
+        df = load_reference_data()
+
+        modes = df["sku"].mode()
+        if modes.empty:
+            raise ValueError("기준 SKU를 선택할 수 없습니다.")
+
+        # 최빈값이 여러 개라면 mode()가 반환한 첫 번째 값 선택
+        sku = int(modes.iloc[0])
+        sku_df = df[df["sku"] == sku]
+
+        baseline_ad_spend = float(sku_df["ad_spend"].mean())
+        now = datetime.now(ZoneInfo("Asia/Seoul"))
+
+        # 두 예측에서 공통으로 사용할 조건
+        common = {
+            "week_start": now.month,
+            "sku": sku,
+            "promo_days": float(df["promo_days"].mean()),
+            "promo_discount": float(sku_df["promo_discount"].mean()),
+            "channel_naver": 0,
+            "channel_own_mall": 0,
+        }
+
+        before = predict_units({
+            **common,
+            "ad_spend": baseline_ad_spend,
+        })
+
+        after = predict_units({
+            **common,
+            "ad_spend": float(new_ad_spend),
+        })
+
+        # 반올림 전 값으로 변화량 계산
+        before_units = max(0.0, before["raw_prediction"])
+        after_units = max(0.0, after["raw_prediction"])
+        difference = after_units - before_units
+
+        change_pct = (
+            difference / before_units * 100
+            if before_units != 0
+            else None
+        )
+
+        warnings = list(dict.fromkeys(
+            before["warnings"] + after["warnings"]
+        ))
+
+        if len(modes) > 1:
+            warnings.append(
+                "최빈 SKU가 여러 개여서 첫 번째 코드를 선택했습니다."
+            )
+
+        return {
+            "status": "ok",
+            "comparison_type": "model_prediction_vs_model_prediction",
+            "reference_date": now.date().isoformat(),
+            "channel": "coupang",
+            "fixed_inputs": common,
+            "baseline_ad_spend": baseline_ad_spend,
+            "new_ad_spend": float(new_ad_spend),
+            "before_predicted_units": round(before_units, 2),
+            "after_predicted_units": round(after_units, 2),
+            "units_difference": round(difference, 2),
+            "units_change_pct": (
+                round(change_pct, 2)
+                if change_pct is not None
+                else None
+            ),
+            "warnings": warnings,
+        }
+
+    except (ValueError, FileNotFoundError) as exc:
+        return {
+            "status": "error",
+            "message": str(exc),
+        }

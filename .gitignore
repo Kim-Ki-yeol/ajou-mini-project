@@ -2,3 +2,8 @@
 __pycache__/
 .env
 *.pyc
+.env.json
+.lh/
+.lh/.env.json
+
+.env.*
