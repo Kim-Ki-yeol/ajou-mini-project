@@ -1,9 +1,8 @@
-
 from langchain.agents.middleware import (
     before_agent,
     wrap_model_call,
 )
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 
 BUSINESS_KEYWORDS = [
@@ -16,25 +15,80 @@ BUSINESS_KEYWORDS = [
     "네이버", "쿠팡", "아마존",
     "자사몰", "sku",
 ]
+
+FOLLOWUP_KEYWORDS = [
+    "그럼", "그러면",
+    "이번에는", "이번엔",
+    "그 제품", "그 상품",
+    "그 채널", "같은 제품",
+    "같은 채널",
+    "아까", "방금",
+    "이전", "앞에서",
+    "다시", "비교",
+    "더", "줄여", "늘려",
+]
+
+
 @before_agent(can_jump_to=["end"])
 def business_guardrail(state, runtime):
-    """업무와 관계없는 질문을 LLM 호출 전에 차단한다."""
+    """업무 질문 및 이전 업무 대화의 후속 질문을 허용한다."""
 
     messages = state.get("messages", [])
 
     if not messages:
         return None
 
-    question = str(messages[-1].content).lower().strip()
+    user_messages = [
+        message
+        for message in messages
+        if isinstance(message, HumanMessage)
+    ]
 
-    if question in ["안녕", "안녕하세요", "고마워", "감사합니다"]:
+    if not user_messages:
         return None
 
-    if any(word in question for word in BUSINESS_KEYWORDS):
-        print("업무 질문 허용 합니다.")
+    question = str(
+        user_messages[-1].content
+    ).lower().strip()
+
+    if question in [
+        "안녕",
+        "안녕하세요",
+        "고마워",
+        "감사합니다",
+    ]:
         return None
 
-    print("업무 외 질문 차단 합니다.")
+    if any(
+        keyword in question
+        for keyword in BUSINESS_KEYWORDS
+    ):
+        print("업무 질문 허용")
+        return None
+
+    previous_questions = [
+        str(message.content).lower()
+        for message in user_messages[:-1]
+    ]
+
+    has_business_history = any(
+        any(
+            keyword in previous_question
+            for keyword in BUSINESS_KEYWORDS
+        )
+        for previous_question in previous_questions
+    )
+
+    is_followup = any(
+        keyword in question
+        for keyword in FOLLOWUP_KEYWORDS
+    )
+
+    if has_business_history and is_followup:
+        print("이전 업무 대화의 후속 질문 허용")
+        return None
+
+    print("업무 외 질문 차단")
 
     return {
         "messages": [
@@ -48,6 +102,8 @@ def business_guardrail(state, runtime):
         ],
         "jump_to": "end",
     }
+
+
 @wrap_model_call
 def log_token_usage(request, handler):
     """LLM 호출 후 토큰 사용량을 출력한다."""

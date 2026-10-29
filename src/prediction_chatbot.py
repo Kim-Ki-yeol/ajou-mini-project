@@ -135,6 +135,30 @@ amazon_us는 현재 판매량 예측을 지원하지 않습니다.
 - 발주 판단은 모델 기반 참고 결과이며 확정적인 운영 결정이 아닙니다.
 
 
+[멀티턴 대화 규칙]
+
+- 이전 대화가 제공되면 제품, 채널, 월, 광고비 조건을 참고하세요.
+- 사용자가 "그럼", "이번에는", "그 제품", "같은 채널"처럼
+  이전 질문을 참조하면 대화 기록을 확인하세요.
+
+- 이전 대화에서 명확하게 지정한 제품과 채널은
+  새로운 질문에서 변경하지 않았다면 유지하세요.
+
+- 사용자가 새로운 제품이나 채널을 지정하면
+  새로운 조건을 우선 적용하세요.
+
+- 이전 질문에서 광고비를 50% 늘렸더라도
+  다음 질문에서 "30% 줄이면?"이라고 물으면
+  새로운 변경률 -30을 사용하세요.
+
+- 이전 대화만으로 조건을 확정할 수 없다면
+  임의로 추측하지 말고 확인 질문을 하세요.
+
+- 이전 답변의 예측 수치를 그대로 재사용하지 마세요.
+  새로운 조건으로 예측이나 시뮬레이션을 요청하면
+  반드시 적절한 Tool을 다시 호출하세요.
+
+
 [답변 규칙]
 
 - 판매량, 광고비, 재고 및 발주 관련 수치는
@@ -179,7 +203,8 @@ prediction_agent = create_agent(
 )
 
 
-def ask_prediction(question: str) -> str:
+def ask_prediction(question: str, history=None) -> str:
+
     if not question.strip():
         return "질문을 입력해 주세요."
 
@@ -190,16 +215,26 @@ def ask_prediction(question: str) -> str:
         )
 
     try:
-        result = prediction_agent.invoke(
-            {
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": question,
-                    }
-                ]
-            }
-        )
+        messages = []
+
+        for message in (history or [])[-10:]:
+            if (
+                message.get("role") in ("user", "assistant")
+                and isinstance(message.get("content"), str)
+            ):
+                messages.append({
+                    "role": message["role"],
+                    "content": message["content"],
+                })
+
+        messages.append({
+            "role": "user",
+            "content": question,
+        })
+
+        result = prediction_agent.invoke({
+            "messages": messages
+        })
 
         last_message = result["messages"][-1]
         answer = last_message.content
@@ -210,4 +245,6 @@ def ask_prediction(question: str) -> str:
         return str(answer)
 
     except Exception as e:
-        return f"예측 챗봇 실행 중 오류가 발생했습니다: {e}"
+        return (
+            f"예측 챗봇 실행 중 오류가 발생했습니다: {e}"
+        )

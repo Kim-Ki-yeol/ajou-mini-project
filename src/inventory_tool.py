@@ -46,7 +46,6 @@ def simulate_inventory(
                 "광고비 감소율은 -100% 이상이어야 합니다."
             )
 
-        # 1. 현재 재고 데이터 조회
         inventory = pd.read_csv(
             INVENTORY_PATH,
             encoding="utf-8-sig",
@@ -75,7 +74,6 @@ def simulate_inventory(
         if lead_days < 0 or moq <= 0:
             raise ValueError("리드타임 또는 최소 발주 수량이 잘못되었습니다.")
 
-        # 2. 국내 3개 채널의 판매량 예측
         original_total = 0.0
         changed_total = 0.0
         channel_results = []
@@ -115,11 +113,9 @@ def simulate_inventory(
                 "재고 소진 기간을 계산할 수 없습니다."
             )
 
-        # 3. 재고 소진 기간 계산
         stock_weeks = current_stock / changed_total
         stock_days = stock_weeks * 7
 
-        # 4. 리드타임 동안의 예상 판매량
         lead_weeks = lead_days / 7
         expected_sales_during_lead = (
             changed_total * lead_weeks
@@ -129,12 +125,9 @@ def simulate_inventory(
             current_stock - expected_sales_during_lead
         )
 
-        # 5. 추가 발주 필요 여부
-        # 임시 운영 기준: 향후 4주 판매량 확보
         target_weeks = 4
         target_stock = changed_total * target_weeks
 
-        # 발주 진행 수량은 현재 가용 재고에 포함하지 않음
         additional_needed = max(
             0.0,
             target_stock - current_stock - open_po,
@@ -162,7 +155,6 @@ def simulate_inventory(
                 "4주 목표 재고 기준 추가 발주가 필요하지 않습니다."
             )
 
-        # 6. 결과 반환
         product_name = (
             stock["product_name"]
             if "product_name" in inventory.columns

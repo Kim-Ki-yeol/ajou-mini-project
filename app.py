@@ -2,8 +2,10 @@
 import streamlit as st
 import pandas as pd
 from pathlib import Path
-from src.agent import ask_agent
-from src.prediction_chatbot import ask_prediction
+
+from ui.prediction_chat import render_prediction_chat
+from ui.agent_chat import render_agent_chat
+
 
 st.set_page_config(
     page_title="AI 재고 코파일럿",
@@ -315,90 +317,8 @@ elif menu == "재고 분석":
 
 
 elif menu == "판매량 예측":
-    st.subheader("AI 판매량 예측 챗봇")
-    st.caption("XGBoost 기반 판매량 예측 및 광고비 시뮬레이션")
-
-    if "prediction_messages" not in st.session_state:
-        st.session_state.prediction_messages = []
-
-    for message in st.session_state.prediction_messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-    question = st.chat_input(
-        "판매량 예측에 대해 질문해 보세요.",
-        key="prediction_chat_input"
-    )
-
-    if question:
-        st.session_state.prediction_messages.append({
-            "role": "user",
-            "content": question
-        })
-
-        with st.chat_message("user"):
-            st.markdown(question)
-
-        with st.chat_message("assistant"):
-            with st.spinner("판매량을 예측하고 있습니다..."):
-                try:
-                    answer = ask_prediction(question)
-
-                    if not isinstance(answer, str):
-                        answer = str(answer)
-
-                    st.markdown(answer)
-
-                except Exception as e:
-                    answer = f"예측 실행 중 오류가 발생했습니다: {e}"
-                    st.error(answer)
-
-        st.session_state.prediction_messages.append({
-            "role": "assistant",
-            "content": answer
-        })
+    render_prediction_chat()
 
 
 elif menu == "AI Agent":
-    st.subheader("AI 재고 코파일럿")
-    st.caption("광고비, 판매량, 재고에 대해 질문해 보세요.")
-
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-    question = st.chat_input(
-        "궁금한 점을 입력하세요.",
-        key="agent_chat_input"
-    )
-
-    if question:
-        st.session_state.messages.append({
-            "role": "user",
-            "content": question
-        })
-
-        with st.chat_message("user"):
-            st.markdown(question)
-
-        with st.chat_message("assistant"):
-            with st.spinner("AI가 분석 중입니다..."):
-                try:
-                    answer = ask_agent(question)
-
-                    if not isinstance(answer, str):
-                        answer = str(answer)
-
-                    st.markdown(answer)
-
-                except Exception as e:
-                    answer = f"오류가 발생했습니다: {e}"
-                    st.error(answer)
-
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": answer
-        })
+    render_agent_chat()
