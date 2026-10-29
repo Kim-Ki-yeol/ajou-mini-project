@@ -31,10 +31,10 @@ def business_guardrail(state, runtime):
         return None
 
     if any(word in question for word in BUSINESS_KEYWORDS):
-        print("[Middleware] 업무 질문 허용")
+        print("업무 질문 허용 합니다.")
         return None
 
-    print("[Middleware] 업무 외 질문 차단")
+    print("업무 외 질문 차단 합니다.")
 
     return {
         "messages": [
@@ -65,5 +65,6 @@ def log_token_usage(request, handler):
         print("입력:", usage.get("input_tokens", 0))
         print("출력:", usage.get("output_tokens", 0))
         print("합계:", usage.get("total_tokens", 0))
+        print("")
 
     return response

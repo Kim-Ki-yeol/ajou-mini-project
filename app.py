@@ -1,15 +1,68 @@
+
 import streamlit as st
 import pandas as pd
 from pathlib import Path
 from src.agent import ask_agent
 
+
 # 화면 설정
 st.set_page_config(
-    page_title="Ajou_AI_mini_Project",
-    layout="wide"
+    page_title="AI 재고 코파일럿",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
 DATA_DIR = Path(__file__).parent / "data"
+
+st.markdown("""
+<style>
+    /* 사이드바 너비 */
+    section[data-testid="stSidebar"] {
+        width: 300px !important;
+        min-width: 300px !important;
+    }
+
+    /* 사이드바 내부 여백 */
+    section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
+        padding-top: 2rem;
+    }
+
+    /* 사이드바 제목 크기 */
+    section[data-testid="stSidebar"] h1 {
+        font-size: 28px !important;
+        font-weight: 700 !important;
+        white-space: nowrap;
+    }
+
+    /* 메뉴 글씨 크기 */
+    section[data-testid="stSidebar"] [data-testid="stRadio"] label p {
+        font-size: 19px !important;
+        font-weight: 500 !important;
+    }
+
+    /* 메뉴 사이 간격 */
+    section[data-testid="stSidebar"] [role="radiogroup"] {
+        gap: 12px;
+    }
+
+    /* 메뉴 항목 디자인 */
+    section[data-testid="stSidebar"] [role="radiogroup"] label {
+        padding: 10px 12px;
+        border-radius: 10px;
+        transition: background-color 0.2s;
+    }
+
+    /* 마우스를 올렸을 때 */
+    section[data-testid="stSidebar"] [role="radiogroup"] label:hover {
+        background-color: rgba(128, 128, 128, 0.12);
+    }
+
+    /* 선택된 메뉴 배경 */
+    section[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {
+        background-color: rgba(255, 75, 75, 0.12);
+    }
+</style>
+""", unsafe_allow_html=True)
 
 @st.cache_data
 def load_sales():
@@ -21,20 +74,28 @@ def load_sales():
 
 sales = load_sales()
 
-# 제목
-st.title("Ajou_AI_mini_Project")
+with st.sidebar:
+    st.title("AI 재고 코파일럿")
+    st.divider()
+
+    menu = st.radio(
+        "메뉴 선택",
+        [
+            "판매량 분석",
+            "광고비 분석",
+            "재고 분석",
+            "판매량 예측",
+            "AI Agent"
+        ],
+        label_visibility="collapsed",
+        key="sidebar_menu"
+    )
+
+st.title("AI 재고 코파일럿")
+st.caption("판매량 · 광고비 · 재고 분석 및 AI 기반 의사결정 지원")
 st.divider()
 
-# 상단 가로 메뉴
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "판매량 분석",
-    "광고비 분석",
-    "재고 분석",
-    "판매량 예측",
-    "AI Agent"
-])
-
-with tab1:
+if menu == "판매량 분석":
     st.subheader("주별 판매량 분석")
 
     col1, col2 = st.columns(2)
@@ -73,7 +134,7 @@ with tab1:
         y_label="판매량 (개)"
     )
 
-with tab2:
+elif menu == "광고비 분석":
     st.subheader("광고비 분석")
     st.write("광고비와 판매량의 관계를 분석합니다.")
 
@@ -96,7 +157,7 @@ with tab2:
 
     st.divider()
 
-    st.subheader("① 광고비와 판매량 관계")
+    st.subheader("광고비와 판매량 관계")
 
     st.scatter_chart(
         weekly_ad,
@@ -113,7 +174,7 @@ with tab2:
 
     st.divider()
 
-    st.subheader("② 주별 광고비 추이")
+    st.subheader("주별 광고비 추이")
 
     st.line_chart(
         weekly_ad,
@@ -130,7 +191,7 @@ with tab2:
             hide_index=True
         )
 
-with tab3:
+elif menu == "재고 분석":
     st.subheader("재고 분석")
     st.write("창고별 제품 재고 현황을 확인합니다.")
 
@@ -175,7 +236,7 @@ with tab3:
 
     st.divider()
 
-    st.subheader("① 제품별 현재 재고")
+    st.subheader("제품별 현재 재고")
 
     product_stock = (
         stock_data.groupby("product_name", as_index=False)["on_hand"]
@@ -193,7 +254,7 @@ with tab3:
 
     st.divider()
 
-    st.subheader("② 현재 재고 vs 입고 예정 수량")
+    st.subheader("현재 재고 vs 입고 예정 수량")
 
     stock_compare = (
         stock_data.groupby("product_name", as_index=False)
@@ -215,7 +276,6 @@ with tab3:
 
     st.divider()
 
-    # 7. 재고 상세 현황
     st.subheader("③ 재고 상세 현황")
 
     stock_table = stock_data[
@@ -244,11 +304,12 @@ with tab3:
         hide_index=True
     )
 
-with tab4:
-    st.subheader("판매량 예측")
-    st.info("Baseline 및 AI 모델의 WAPE 비교를 추가할 예정입니다.")
 
-with tab5:
+elif menu == "판매량 예측":
+    st.subheader("판매량 예측")
+    st.info("모델이 완성되면 Tool을 구성하고 연동할 예정입니다.")
+
+elif menu == "AI Agent":
     st.subheader("AI 재고 코파일럿")
     st.caption("광고비, 판매량, 재고에 대해 질문해 보세요.")
 
@@ -259,7 +320,7 @@ with tab5:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    question = st.chat_input("메시지를 입력하세요...")
+    question = st.chat_input("궁금한 점을 입력 하세요 ")
 
     if question:
         st.session_state.messages.append({
@@ -280,6 +341,7 @@ with tab5:
                     answer = f"오류가 발생했습니다: {e}"
                     st.error(answer)
 
+        # AI 응답 기록 저장
         st.session_state.messages.append({
             "role": "assistant",
             "content": answer
