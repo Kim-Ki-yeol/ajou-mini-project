@@ -334,7 +334,11 @@ elif menu == "AI Agent":
         with st.chat_message("assistant"):
             with st.spinner("AI가 분석 중입니다..."):
                 try:
-                    answer = ask_agent(question)
+                    # 방금 추가한 현재 질문을 제외한 이전 대화를 함께 전달합니다.
+                    answer = ask_agent(
+                        question,
+                        history=st.session_state.messages[:-1],
+                    )
                     st.markdown(answer)
 
                 except Exception as e:

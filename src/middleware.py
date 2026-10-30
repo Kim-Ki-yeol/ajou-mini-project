@@ -16,6 +16,8 @@ BUSINESS_KEYWORDS = [
     "예측", "시뮬레이션",
     "네이버", "쿠팡", "아마존",
     "자사몰", "sku",
+    "필요", "버티", "버틸", "충분",
+    "앰플", "크림", "캡슐",
 ]
 @before_agent(can_jump_to=["end"])
 def business_guardrail(state, runtime):
@@ -33,6 +35,21 @@ def business_guardrail(state, runtime):
 
     if any(word in question for word in BUSINESS_KEYWORDS):
         print("업무 질문 허용 합니다.")
+        return None
+
+    # "그럼 4주치는?"처럼 이전 업무 질문에 이어지는 후속 질문은 허용합니다.
+    previous_questions = [
+        str(message.content).lower()
+        for message in messages[:-1]
+        if getattr(message, "type", None) == "human"
+    ]
+
+    if any(
+        word in previous
+        for previous in previous_questions
+        for word in BUSINESS_KEYWORDS
+    ):
+        print("이전 업무 대화의 후속 질문으로 허용 합니다.")
         return None
 
     print("업무 외 질문 차단 합니다.")

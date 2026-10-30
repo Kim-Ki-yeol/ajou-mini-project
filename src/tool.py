@@ -339,6 +339,15 @@ class PredictSalesInput(BaseModel):
             "결과에 1주 예측값 × weeks를 함께 반환합니다."
         ),
     )
+    current_stock: float | None = Field(
+        None,
+        description=(
+            "재고가 몇 주 버티는지, 버틸 수 있는지, 충분한지 물을 때만 전달합니다. "
+            "'n주 동안 얼마나 필요해?'처럼 필요 수량만 물으면 전달하지 않습니다. "
+            "먼저 get_inventory_data로 조회한 해당 제품의 현재 재고(on_hand)를 "
+            "그대로 전달합니다. 발주 중 수량은 포함하지 않습니다."
+        ),
+    )
 
 
 @tool(args_schema=PredictSalesInput)
@@ -354,8 +363,31 @@ def predict_sales(
     promo_discount: float | None = None,
     channel: Literal["coupang", "naver", "own_mall"] | None = None,
     weeks: int = 1,
+    current_stock: float | None = None,
 ) -> dict:
     """기준 조건과 사용자 지정 조건의 예상 판매량을 비교합니다.
+
+    필요 수량 질문('4주 동안 재고가 얼마나 필요해?'):
+        current_stock 없이 weeks만 전달하고 after_total_units로 답합니다.
+        get_inventory_data는 호출하지 않습니다.
+
+    재고 소진 기간 질문('재고가 몇 주 버텨?', '재고로 4주 버틸 수 있어?'):
+        1. get_inventory_data를 channel=coupang으로 호출해 국내 창고(KR_WH)
+           재고를 조회합니다. channel=all은 아마존 재고가 섞이므로 쓰지 않습니다.
+        2. 조회한 제품의 현재 재고(on_hand)를 current_stock으로,
+           제품명을 product_name으로 전달해 이 도구를 호출합니다.
+           '4주 버틸 수 있어?'처럼 기간을 물으면 weeks도 함께 전달합니다.
+        3. KR_WH는 쿠팡·네이버·자사몰이 공유하므로 대표 답은
+           weeks_of_cover(국내 3개 채널 수요 합산 기준)로 합니다.
+           weeks_of_cover_channel_only(선택 채널 수요만 반영)는 참고로만 안내합니다.
+        4. 기간을 물었다면 stock_sufficient(재고 ≥ kr_wh_total_units)로
+           충분한지 답하고, 기간 필요 수량은 after_total_units가 아니라
+           kr_wh_total_units(국내 3개 채널 합산)로 안내합니다.
+           기간을 묻지 않았다면 충분 여부를 말하지 않습니다.
+        5. 소진 기간과 필요 수량은 직접 계산하지 않고 반환값을 사용합니다.
+        6. 발주 중 수량은 현재 재고에 포함하지 않습니다.
+        7. 아마존(AMZ_FBA)은 예측 모델이 지원하지 않습니다. 이 도구를 호출하지
+           말고 아마존 재고 소진 기간은 계산할 수 없다고 안내합니다.
 
     사용자가 명시한 조건만 전달하고 나머지는 생략합니다.
     생략된 조건은 CSV와 현재 날짜에서 자동 계산합니다.
@@ -475,6 +507,11 @@ def predict_sales(
         if not 1 <= weeks <= 52:
             raise ValueError("weeks는 1~52주여야 합니다.")
 
+        if current_stock is not None and not (
+            math.isfinite(float(current_stock)) and current_stock >= 0
+        ):
+            raise ValueError("current_stock은 0 이상의 숫자여야 합니다.")
+
         scenario = baseline.copy()
         scenario.update(supplied)
 
@@ -533,6 +570,48 @@ def predict_sales(
                 f"1주 예측값에 {weeks}를 곱한 값입니다."
             )
 
+        stock_result = {}
+
+        if current_stock is not None:
+            # KR_WH 재고는 국내 3개 채널이 공유하므로 세 채널 수요를 합산합니다.
+            kr_wh_units = 0.0
+
+            for naver, own_mall in CHANNEL_ENCODING.values():
+                channel_scenario = scenario.copy()
+                channel_scenario["channel_naver"] = naver
+                channel_scenario["channel_own_mall"] = own_mall
+                kr_wh_units += max(
+                    0.0,
+                    predict_units(channel_scenario)["raw_prediction"],
+                )
+
+            def weeks_of_cover(weekly_units: float) -> float | None:
+                return (
+                    round(current_stock / weekly_units, 1)
+                    if weekly_units > 0
+                    else None
+                )
+
+            # 대표값은 KR_WH를 함께 쓰는 국내 3개 채널 수요 합산 기준입니다.
+            stock_result = {
+                "current_stock": current_stock,
+                "kr_wh_weekly_units": round(kr_wh_units, 2),
+                "weeks_of_cover": weeks_of_cover(kr_wh_units),
+                "weeks_of_cover_channel_only": weeks_of_cover(after_units),
+            }
+
+            # 충분 여부는 사용자가 기간을 물었을 때만 판단합니다.
+            if weeks > 1:
+                stock_result["kr_wh_total_units"] = round(kr_wh_units * weeks, 2)
+                stock_result["stock_sufficient"] = (
+                    current_stock >= kr_wh_units * weeks
+                )
+
+            warnings.append(
+                "재고 소진 기간은 현재 재고(발주 중 수량 제외)를 1주 예측 "
+                "판매량으로 나눈 값이며, 매주 같은 조건이 유지된다고 가정합니다."
+            )
+
         return {
             "status": "ok",
             "result_type": "model_scenario_comparison",
@@ -552,11 +631,18 @@ def predict_sales(
                 if before_units != 0
                 else None
             ),
-            # n주 필요 수량은 1주 예측값 × n으로 계산합니다.
             "weeks": weeks,
-            "before_total_units": round(before_units * weeks, 2),
-            "after_total_units": round(after_units * weeks, 2),
-            "total_units_difference": round(difference * weeks, 2),
+            # 재고 질문에서는 국내 3개 채널 합산값만 남겨 단일 채널 합계와 혼동을 막습니다.
+            **(
+                stock_result
+                if current_stock is not None
+                else {
+                    # n주 필요 수량은 1주 예측값 × n으로 계산합니다.
+                    "before_total_units": round(before_units * weeks, 2),
+                    "after_total_units": round(after_units * weeks, 2),
+                    "total_units_difference": round(difference * weeks, 2),
+                }
+            ),
             "warnings": warnings,
         }
 
