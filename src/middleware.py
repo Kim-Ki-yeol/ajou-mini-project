@@ -8,7 +8,8 @@ from langchain_core.messages import AIMessage
 
 BUSINESS_KEYWORDS = [
     "광고비", "광고 예산",
-    "판매량", "매출", "재고",
+    "판매", "매출", "재고",
+    "팔리", "팔릴", "팔아", "몇 개",
     "품절", "발주", "수요",
     "제품", "상품", "채널",
     "프로모션", "할인",

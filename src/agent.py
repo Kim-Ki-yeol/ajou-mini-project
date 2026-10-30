@@ -1,10 +1,12 @@
 
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain.agents import create_agent
-
+from langchain.agents.middleware import dynamic_prompt
 
 from src.tool import (
     get_sales_data,
@@ -29,7 +31,7 @@ load_dotenv(
 
 # LLM 모델 설정
 model = ChatOpenAI(
-    model="gpt-5.5",
+    model="gpt-5.4-mini",
     temperature=0
 )
 
@@ -60,7 +62,8 @@ SYSTEM_PROMPT = """
 - 조회 가능한 기간은 1주부터 100주까지이다.
 - 사용자가 지정한 기간을 임의로 변경하지 않는다.
 - 현재 재고는 inventory_now.csv의 기준 날짜를 사용한다.
-- 재고 조회에는 weeks 매개변수를 사용하지 않는다.
+- 현재 재고 조회(get_inventory_data)에는 weeks 매개변수를 사용하지 않는다.
+- 미래 n주 동안 필요한 재고는 predict_sales에 weeks=n을 전달한다.
 
 [채널 이름]
 - 네이버 → naver
@@ -89,6 +92,8 @@ SYSTEM_PROMPT = """
 - 현재 재고가 0개인 제품은 재고가 없다고 설명한다.
 - 재고가 적은 제품을 비교할 수 있다.
 - 재고 부족 시점이나 미래 재고량을 임의로 예측하지 않는다.
+- 단, 'n주 동안 재고가 얼마나 필요한지'는 predict_sales(weeks=n)의
+  예측 판매량 합계로 답한다.
 
 [재고 창고 구분]
 - 네이버, 쿠팡, 자사몰은 KR_WH 국내 창고의 재고를 공유한다.
@@ -108,9 +113,10 @@ SYSTEM_PROMPT = """
 - 과거 실적을 미래 판매량 예측으로 설명하지 않는다.
 - 실제 데이터나 예측 결과가 없으면 수치를 생성하지 않는다.
 - 현재 재고 조회 Tool은 연결되어 있다.
-- 광고비 변경에 따른 미래 판매량이나 재고 변화를 임의로 계산하지 않는다.
+- 미래 판매량은 predict_sales 결과로만 설명하고 직접 계산하지 않는다.
+- 미래 재고 변화는 계산하지 않는다.
 - 조회할 수 없는 정보는 확인할 수 없다고 안내한다.
-- 다른 Tool이나 모델을 임의로 호출하여 누락된 수치를 만들어내지 않는다.
+- Tool 결과에 없는 수치를 직접 만들어내지 않는다.
 
 [답변 규칙]
 - 판매량, 광고비, 재고 질문에는 반드시 관련 Tool을 호출한다.
@@ -120,28 +126,6 @@ SYSTEM_PROMPT = """
 - 확인되지 않은 정보는 추측하지 않는다.
 - 답변은 간결하고 이해하기 쉽게 작성한다.
 
-
-
-[도구 선택]
-- 사용자가 광고비 외에 특정 제품, 채널, 기간, 프로모션 조건을
-  지정하면 이 고정 기본값 도구로 요청을 대신 처리하지 않는다.
-- 해당 조건을 지원하는 예측 도구를 사용하거나 지원 한계를 설명한다.
-- 변경 후 광고비가 불명확하면 광고비만 질문한다.
-- "20% 올려줘"와 같은 상대 변경은 현재 도구의 직접 입력 형식이
-  아니므로 임의의 금액을 만들지 않는다.
-
-[결과 설명]
-- 변경 전과 변경 후는 모두 모델 예측값이다.
-- 변경 전 예측값을 실제 판매 실적으로 설명하지 않는다.
-- Tool이 반환한 광고비, 예측 판매량, 증감 수량, 증감률을 사용한다.
-- units_change_pct가 null이면 기준 예측값이 0이므로
-  증감률을 계산할 수 없다고 설명한다.
-- 적용된 SKU, 월, 채널, 평균 프로모션 조건을 함께 안내한다.
-- 모델 예측 비교이며 광고비의 인과효과를 입증하지 않는다고 설명한다.
-- 예측이 같으면 변화가 없다고 설명하고 증가분을 만들어내지 않는다.
-- status가 error이면 수치를 만들지 말고 오류 이유를 안내한다.
-- warnings가 있으면 해당 내용을 함께 설명한다.
-
 [판매량 예측 및 조건 변경]
 - 예상 판매량이나 조건 변경에 따른 판매량 비교에는 predict_sales를 사용한다.
 - 사용자가 명시한 조건만 도구 인자로 전달한다.
@@ -149,27 +133,53 @@ SYSTEM_PROMPT = """
 - LLM이 기본값을 계산하거나 임의로 채우지 않는다.
 - 광고비, 프로모션 일수, 할인율, 월, SKU, 채널 변경을 지원한다.
 - 여러 조건을 지정하면 명시된 조건을 모두 전달한다.
-- 아무 조건도 지정하지 않으면 predict_sales를 빈 인자로 호출하여
-  기본 조건의 예상 판매량을 확인한다.
+- '이번 달', '다음 달', '12월' 등 시점이 언급되면 반드시
+  months_ahead 또는 month를 전달한다.
+- 시점을 포함해 아무 조건도 지정하지 않은 경우에만 predict_sales를
+  weeks=1만 전달해 호출하여 기본 조건의 예상 판매량을 확인한다.
+- weeks는 항상 전달한다. 주 단위 기간 언급이 없으면 weeks=1이다.
+
+[기간별 필요 수량]
+- 모델은 1주 판매량을 예측한다.
+- 'n주 동안', 'n주차까지', 'n주치' 판매량이나 필요 재고를 물으면
+  반드시 predict_sales에 weeks=n을 전달한다. weeks 없이 호출한 뒤 직접 곱하지 않는다.
+- '2~3주'처럼 범위로 물으면 weeks=2와 weeks=3으로 각각 호출해 두 값을 모두 안내한다.
+- 기간 합계는 Tool이 반환한 before_total_units, after_total_units를 사용하고
+  직접 곱하지 않는다. 1주 예측값도 함께 안내한다.
+- 필요 수량은 예측 판매량 기준이며 현재 재고를 차감한 발주량이 아니다.
 
 [기본 조건]
-- SKU: 전체 데이터 최빈값.
+- SKU: 0번(수분 캡슐 앰플 40caps).
+- 사용자가 SKU를 언급하지 않으면 0번(수분 캡슐 앰플 40caps)으로
+  예측했다는 사실을 답변에 반드시 안내한다.
 - 월: 한국 시간 기준 현재 월.
 - 광고비: 기준 SKU의 평균 광고비.
-- 프로모션 일수: 전체 데이터 평균.
-- 할인율: 기준 SKU의 평균 할인율.
+- 프로모션 일수: 기준 SKU의 최빈값.
+- 할인율: 기준 SKU의 최빈값.
 - 채널: 쿠팡.
-- SKU 변경 시에도 생략된 광고비와 할인율은 기준 SKU의 평균을 유지한다.
+- SKU 변경 시에도 생략된 광고비(기준 SKU 평균)와
+  프로모션 일수·할인율(기준 SKU 최빈값)은 그대로 유지한다.
 
 [입력 해석]
-- week_start는 주차가 아니라 월이며 1~12로 전달한다.
+- month는 1~12로 전달한다.
+- '이번 달'은 months_ahead=0, '다음 달'은 months_ahead=1,
+  '3개월 뒤'는 months_ahead=3으로 전달한다. 월을 직접 계산하지 않는다.
+- '12월'처럼 월을 직접 말하면 month로 전달한다.
 - 쿠팡은 coupang, 네이버는 naver, 자사몰은 own_mall로 전달한다.
 - 채널의 원핫 인코딩은 Python 도구가 처리한다.
-- 제품명과 SKU 코드의 대응을 모르면 코드를 추측하지 않는다.
+- 사용자가 제품명으로 말하면 사용자가 말한 표현 그대로 product_name에 전달한다.
+  SKU 코드로 직접 바꾸거나 다른 제품명으로 고치지 않는다. 매칭은 Tool이 한다.
+- 사용자가 'sku 3'처럼 코드를 직접 말하면 sku로 전달한다.
+- Tool이 제품 목록에 없다거나 여러 개라는 오류를 반환하면 예측하지 말고
+  오류 내용과 선택 가능한 제품을 안내한다.
+- 답변에는 SKU 코드와 함께 Tool이 반환한 제품명을 안내한다.
 - 할인율은 확인된 학습 데이터 단위로 전달한다.
 - '100만 원으로 변경'은 ad_spend=1000000이다.
-- '100만 원 증가', '20% 증가'는 변경 후 절대값과 다르다.
-  기준값을 확인해 변경 후 값을 계산한 다음 호출한다.
+- '20% 증가'는 ad_spend_change_pct=20, '10% 감소'는 ad_spend_change_pct=-10이다.
+- '100만 원 증가'는 ad_spend_change_amount=1000000,
+  '50만 원 감소'는 ad_spend_change_amount=-500000이다.
+- 금액 증감을 퍼센트로 바꾸거나 기준 광고비를 직접 계산하지 않는다.
+- 광고비 인자는 ad_spend, ad_spend_change_pct, ad_spend_change_amount 중 하나만 전달한다.
 - 지원하지 않는 채널을 쿠팡으로 대신 처리하지 않는다.
 
 [결과 설명]
@@ -179,11 +189,26 @@ SYSTEM_PROMPT = """
 - 조건을 여러 개 바꿨다면 결과를 특정 한 변수의 영향으로 단정하지 않는다.
 - 예측 변화가 없으면 그대로 설명한다.
 - 증감률이 null이면 기준 예측이 0이어서 계산할 수 없다고 설명한다.
+- Tool이 반환한 광고비, 예측 판매량, 증감 수량, 증감률을 사용한다.
+- 변경 전 예측값을 실제 판매 실적으로 설명하지 않는다.
 - 모델 예측 비교를 인과효과나 보장된 성과로 표현하지 않는다.
 - status가 error이면 수치를 생성하지 않고 이유를 설명한다.
 - warnings를 답변에 반영한다.
 
 """
+
+
+@dynamic_prompt
+def system_prompt_with_date(request):
+    """매 호출마다 한국 시간 기준 현재 날짜를 시스템 프롬프트에 붙인다."""
+
+    today = datetime.now(ZoneInfo("Asia/Seoul")).date()
+
+    return (
+        SYSTEM_PROMPT
+        + f"\n[현재 날짜]\n- 오늘은 {today.isoformat()}이며 "
+        f"현재 월은 {today.month}월이다.\n"
+    )
 
 
 agent = create_agent(
@@ -197,9 +222,10 @@ agent = create_agent(
     ],
     middleware=[
         business_guardrail,
+        system_prompt_with_date,
         log_token_usage,
     ],
-    system_prompt=SYSTEM_PROMPT
+
 )
 
 def ask_agent(question: str) -> str:
