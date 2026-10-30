@@ -84,7 +84,6 @@ with st.sidebar:
             "판매량 분석",
             "광고비 분석",
             "재고 분석",
-            "판매량 예측",
             "AI Agent"
         ],
         label_visibility="collapsed",
@@ -304,10 +303,6 @@ elif menu == "재고 분석":
         hide_index=True
     )
 
-
-elif menu == "판매량 예측":
-    st.subheader("판매량 예측")
-    st.info("모델이 완성되면 Tool을 구성하고 연동할 예정입니다.")
 
 elif menu == "AI Agent":
     st.subheader("AI 재고 코파일럿")
