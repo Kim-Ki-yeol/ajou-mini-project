@@ -323,7 +323,11 @@ class PredictSalesInput(BaseModel):
     )
     promo_discount: float | None = Field(
         None,
-        description="변경 후 할인율. 학습 데이터와 동일한 단위입니다.",
+        description=(
+            "변경 후 할인율(0~1 소수). 퍼센트를 100으로 나눠 전달합니다. "
+            "'10%'는 0.1, '15%'는 0.15, '30%'는 0.3입니다. 10이나 10.0으로 전달하지 않습니다. "
+            "ad_spend_change_pct(퍼센트 숫자 그대로)와 단위가 다릅니다."
+        ),
     )
     channel: Literal["coupang", "naver", "own_mall"] | None = Field(
         None,
@@ -503,6 +507,13 @@ def predict_sales(
 
         if promo_discount is not None and promo_discount < 0:
             raise ValueError("할인율은 0 이상이어야 합니다.")
+
+        # 퍼센트 숫자(10.0)로 잘못 전달되면 소수로 다시 호출하도록 안내합니다.
+        if promo_discount is not None and promo_discount > 1:
+            raise ValueError(
+                f"promo_discount={promo_discount}는 0~1 소수여야 합니다. "
+                f"{promo_discount}%라면 {promo_discount / 100}로 다시 호출하세요."
+            )
 
         if not 1 <= weeks <= 52:
             raise ValueError("weeks는 1~52주여야 합니다.")
